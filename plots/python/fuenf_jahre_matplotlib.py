@@ -61,8 +61,7 @@ def main(argv=None) -> int:
 
     plt.rcParams.update(
         {
-            "font.family": "sans-serif",
-            "font.sans-serif": ["Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"],
+            **wg.rc_font(),
             "figure.facecolor": wg.BACKGROUND,
             "savefig.facecolor": wg.BACKGROUND,
             "text.color": wg.TEXT,

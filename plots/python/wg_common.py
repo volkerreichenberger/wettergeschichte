@@ -55,6 +55,27 @@ SOURCE_NOTE = "Datenquelle: Deutscher Wetterdienst, Climate Data Center (opendat
 #: Schlusszeile aller Begleittexte – bewusst nur drei Stück.
 HASHTAGS = "#wetter #wettergeschichte #stuttgart"
 
+# --------------------------------------------------------------------------- #
+# Schrift
+# --------------------------------------------------------------------------- #
+
+#: Erste Wahl ist Myriad Pro; die Übrigen springen ein, wo sie nicht liegt.
+FONT_FAMILY = ["Myriad Pro", "Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"]
+
+#: Zusammen mit der Familie wählt das den schmalen Schnitt aus
+#: (/Library/Fonts/MyriadPro-Cond.otf). Fehlt ein schmaler Schnitt, nimmt
+#: matplotlib den nächstbesten – die Grafik bricht deswegen nicht.
+FONT_STRETCH = "condensed"
+
+
+def rc_font() -> dict:
+    """rcParams für die Schrift, für alle matplotlib-Skripte gleich."""
+    return {
+        "font.family": "sans-serif",
+        "font.sans-serif": FONT_FAMILY,
+        "font.stretch": FONT_STRETCH,
+    }
+
 
 # --------------------------------------------------------------------------- #
 # Daten

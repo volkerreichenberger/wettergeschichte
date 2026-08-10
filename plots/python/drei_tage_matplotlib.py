@@ -102,12 +102,14 @@ def day_axis(ax, current: pd.DataFrame) -> None:
     for a, b in zip(bounds, bounds[1:]):
         ts = current.loc[a, "timestamp"]
         ticks.append((a + b - 1) / 2)
+        # Zwei Zeilen: Wochentag oben, Datum darunter – so bleibt Platz für
+        # eine deutlich größere Schrift.
         labels.append(
-            f"{wg.WEEKDAYS[ts.weekday()]}, {ts.day}. {wg.MONTH_NAMES_LONG[ts.month - 1]}"
+            f"{wg.WEEKDAYS[ts.weekday()]}\n{ts.day}. {wg.MONTH_NAMES_LONG[ts.month - 1]}"
         )
     ax.set_xticks(ticks)
-    ax.set_xticklabels(labels, fontsize=10)
-    ax.tick_params(axis="x", length=0, pad=8)
+    ax.set_xticklabels(labels, fontsize=15, linespacing=1.45)
+    ax.tick_params(axis="x", length=0, pad=10)
     ax.set_xlim(-0.5, len(current) - 0.5)
 
 
@@ -181,8 +183,7 @@ def main(argv=None) -> int:
 
     plt.rcParams.update(
         {
-            "font.family": "sans-serif",
-            "font.sans-serif": ["Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"],
+            **wg.rc_font(),
             "figure.facecolor": wg.BACKGROUND,
             "savefig.facecolor": wg.BACKGROUND,
             "text.color": wg.TEXT,
@@ -200,7 +201,8 @@ def main(argv=None) -> int:
     # das Bild im Feed nur die Kurven zeigt.
     # Oben etwas Luft lassen: die Einheit steht über der Skala und würde am
     # Bildrand sonst angeschnitten.
-    ax = fig.add_axes((0.105, 0.085, 0.875, 0.855))
+    # Unten Platz für die zweizeiligen Tagesnamen, oben für die Einheit.
+    ax = fig.add_axes((0.105, 0.165, 0.875, 0.775))
 
     # Vorjahre von alt nach jung, damit die dunkleren Kurven oben liegen.
     for offset in range(args.years, 0, -1):

@@ -32,8 +32,7 @@ import wg_common as wg
 def style() -> None:
     plt.rcParams.update(
         {
-            "font.family": "sans-serif",
-            "font.sans-serif": ["Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"],
+            **wg.rc_font(),
             "axes.edgecolor": wg.GRID,
             "axes.linewidth": 0.8,
             "text.color": wg.TEXT,
