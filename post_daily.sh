@@ -49,18 +49,24 @@ while [ $# -gt 0 ]; do
 done
 
 warte_auf_bild() {
-  # Pollt die öffentliche URL, bis sie 200 liefert. Rückgabe 1 bei Zeitablauf.
-  local url="$1" start=$SECONDS code=""
+  # Pollt die öffentliche URL, bis sie 200 liefert *und* die ausgelieferte
+  # Datei so groß ist wie die lokale. Der Größenvergleich ist nötig, weil ein
+  # ersetztes Bild unter gleichem Namen sofort 200 liefert – aber noch mit dem
+  # alten Inhalt, den Instagram dann holen würde.
+  local url="$1" datei="$2" start=$SECONDS code="" ferne="" lokal=""
+  lokal="$(wc -c < "$datei" | tr -d ' ')"
   echo "-- warte, bis das Bild ausgeliefert wird (bis zu ${WAIT_SECONDS}s)"
   while [ $(( SECONDS - start )) -lt "$WAIT_SECONDS" ]; do
-    code="$(curl -s -o /dev/null -w '%{http_code}' -L --max-time 20 "$url" || true)"
-    if [ "$code" = "200" ]; then
+    read -r code ferne <<<"$(curl -s -o /dev/null -w '%{http_code} %{size_download}' \
+                             -L --max-time 30 "$url" || echo "000 0")"
+    if [ "$code" = "200" ] && [ "$ferne" = "$lokal" ]; then
       echo "   erreichbar nach $(( SECONDS - start ))s"
       return 0
     fi
     sleep "$WAIT_INTERVAL"
   done
-  echo "   nach ${WAIT_SECONDS}s immer noch nicht da (zuletzt HTTP ${code:-?})" >&2
+  echo "   nach ${WAIT_SECONDS}s nicht in der erwarteten Fassung da " \
+       "(HTTP ${code:-?}, ${ferne:-?} statt ${lokal} Bytes)" >&2
   return 1
 }
 
@@ -168,7 +174,8 @@ if [ -n "${WG_UPLOAD_CMD:-}" ] && [ -n "${WG_PUBLIC_URL:-}" ]; then
   # einmal, und geprüft wird das zuletzt hinzugefügte Bild.
   # ${URLS[-1]} gibt es erst ab bash 4.3; macOS liefert 3.2.
   LETZTE="${URLS[$(( ${#URLS[@]} - 1 ))]}"
-  if [ "$UPLOAD" -eq 1 ] && ! warte_auf_bild "$LETZTE"; then
+  LETZTE_DATEI="${IMAGES[$(( ${#IMAGES[@]} - 1 ))]}"
+  if [ "$UPLOAD" -eq 1 ] && ! warte_auf_bild "$LETZTE" "$LETZTE_DATEI"; then
     # Ohne abrufbares Bild scheitert die Instagram-API ohnehin – dann lieber
     # hier abbrechen, als einen kaputten Container anzulegen.
     [ "$PUBLISH" -eq 1 ] && { echo "   Abbruch vor dem Veröffentlichen." >&2; exit 1; }

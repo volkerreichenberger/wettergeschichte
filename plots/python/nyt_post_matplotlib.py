@@ -164,7 +164,7 @@ def legend(ax, summary, loc: str) -> None:
 def render(clim, year_df, summary, window, path, args, ylim=None, mit_legende=True) -> None:
     fig = plt.figure(figsize=(SIZE_PX / 200, SIZE_PX / 200), dpi=200)
     # Oben Luft für die Einheit, die über der Skala steht.
-    ax = fig.add_axes((0.105, 0.075, 0.875, 0.865))
+    ax = fig.add_axes((0.105, 0.105, 0.875, 0.835))
 
     draw(clim, year_df, summary, ax, window, ylim)
     if mit_legende:
@@ -178,7 +178,9 @@ def render(clim, year_df, summary, window, path, args, ylim=None, mit_legende=Tr
     bottom, top = ax.get_ylim()
     ticks = [t for t in ax.get_yticks() if bottom + 0.5 <= t <= top - 1.5]
     ax.set_yticks(ticks)
-    ax.set_yticklabels([f"{int(t)}" for t in ticks], fontsize=11)
+    ax.set_yticklabels([f"{int(t)}" for t in ticks], fontsize=13)
+    # Die Monatsnamen unten sind auf dem Telefon die wichtigste Orientierung.
+    ax.tick_params(axis="x", labelsize=16)
 
     save_kwargs = {"pil_kwargs": {"quality": args.jpeg_quality}} if args.format == "jpg" else {}
     fig.savefig(path, dpi=args.dpi, **save_kwargs)

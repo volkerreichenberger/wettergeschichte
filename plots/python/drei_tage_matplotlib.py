@@ -116,7 +116,7 @@ def day_axis(ax, current: pd.DataFrame) -> None:
             f"{wg.WEEKDAYS[ts.weekday()]}\n{ts.day}. {wg.MONTH_NAMES_LONG[ts.month - 1]}"
         )
     ax.set_xticks(ticks)
-    ax.set_xticklabels(labels, fontsize=15, linespacing=1.45)
+    ax.set_xticklabels(labels, fontsize=19, linespacing=1.4)
     ax.tick_params(axis="x", length=0, pad=10)
     ax.set_xlim(-0.5, len(current) - 0.5)
 
@@ -211,7 +211,7 @@ def main(argv=None) -> int:
     # Oben etwas Luft lassen: die Einheit steht über der Skala und würde am
     # Bildrand sonst angeschnitten.
     # Unten Platz für die zweizeiligen Tagesnamen, oben für die Einheit.
-    ax = fig.add_axes((0.105, 0.165, 0.875, 0.775))
+    ax = fig.add_axes((0.105, 0.205, 0.875, 0.735))
 
     # Vorjahre von alt nach jung, damit die dunkleren Kurven oben liegen.
     for offset in range(args.years, 0, -1):
