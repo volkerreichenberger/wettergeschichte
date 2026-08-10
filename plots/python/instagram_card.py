@@ -140,8 +140,7 @@ def caption(summary: dict, chart: str, year_df=None, clim=None, window=None) -> 
             f"die dunkle Fläche den Normalbereich."
             f"\n\nDaten: Deutscher Wetterdienst, Station {summary['station_id']}, "
             f"Stand {summary['last_date']}."
-            "\n\n#wetter #klima #stuttgart #dwd #klimawandel #datenvisualisierung "
-            "#wetterdaten #opendata #climatedata"
+            f"\n\n{wg.HASHTAGS}"
         )
 
     warmer = "wärmer" if summary["anomaly"] > 0 else "kühler"
@@ -165,8 +164,7 @@ def caption(summary: dict, chart: str, year_df=None, clim=None, window=None) -> 
     tail = (
         f"\n\nDaten: Deutscher Wetterdienst, Station {summary['station_id']}, "
         f"Stand {summary['last_date']}."
-        "\n\n#wetter #klima #stuttgart #dwd #klimawandel #datenvisualisierung "
-        "#wetterdaten #opendata #climatedata"
+        f"\n\n{wg.HASHTAGS}"
     )
     if chart == "fuenf_jahre":
         head = (

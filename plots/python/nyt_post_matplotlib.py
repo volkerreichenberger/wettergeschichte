@@ -128,8 +128,7 @@ def caption(clim, year_df, summary, zeitraum: str, months: int, window) -> str:
         f"\n\nDaten: Deutscher Wetterdienst, Climate Data Center "
         f"(opendata.dwd.de), Station {summary['station_id']}. "
         f"Stand {summary['last_date']}."
-        "\n\n#wetter #klima #stuttgart #dwd #klimawandel #datenvisualisierung "
-        "#wetterdaten #opendata #climatedata"
+        f"\n\n{wg.HASHTAGS}"
     )
 
 

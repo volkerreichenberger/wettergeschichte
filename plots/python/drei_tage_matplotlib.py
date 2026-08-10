@@ -157,8 +157,7 @@ def caption(current, past, station_name: str, args, last) -> str:
         f"\n\nDaten: Deutscher Wetterdienst, Climate Data Center "
         f"(opendata.dwd.de), Station {args.station}. "
         f"Stand {last:%d.%m.%Y}, {last:%H} Uhr."
-        "\n\n#wetter #klima #stuttgart #dwd #klimawandel #datenvisualisierung "
-        "#wetterdaten #opendata #climatedata"
+        f"\n\n{wg.HASHTAGS}"
     )
 
 

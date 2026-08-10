@@ -52,6 +52,9 @@ MONTH_END = 366
 
 SOURCE_NOTE = "Datenquelle: Deutscher Wetterdienst, Climate Data Center (opendata.dwd.de)"
 
+#: Schlusszeile aller Begleittexte – bewusst nur drei Stück.
+HASHTAGS = "#wetter #wettergeschichte #stuttgart"
+
 
 # --------------------------------------------------------------------------- #
 # Daten

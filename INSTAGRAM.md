@@ -3,28 +3,60 @@
 Der Kanal heißt **wettergeschichte** und ist noch in Einrichtung (Stand
 10. August 2026). Die Schritte dafür stehen unten in der Tabelle.
 
-Kurze Antwort auf die Frage aus dem README: **Ja, das geht über eine API** –
-aber nicht so bequem, wie man hoffen würde. Zwei Dinge machen Arbeit:
+Kurze Antwort auf die Frage aus dem README: **Ja, das geht über eine API.**
+Die einzige echte Unbequemlichkeit: die API **lädt keine Datei hoch**, sondern
+holt sich das Bild von einer öffentlich erreichbaren URL. Man braucht also
+zusätzlich einen Ort, an dem die JPGs liegen (siehe unten).
 
-1. Der Kanal muss ein **Profi-Konto** (Business oder Creator) sein und über
-   eine Facebook-Seite mit einer Meta-App verbunden werden.
-2. Die API **lädt keine Datei hoch**. Sie holt sich das Bild von einer
-   öffentlich erreichbaren URL. Man braucht also zusätzlich einen Ort, an dem
-   die JPGs liegen.
+## Zwei Wege – dieses Projekt nimmt den Instagram-Login
 
-Wenn beides einmal steht, ist das Posten selbst ein Dreizeiler und läuft
-zuverlässig automatisiert – zum Beispiel jeden Morgen per `cron`.
+Meta bietet die Veröffentlichungs-API in zwei Ausführungen an. Welche gilt,
+entscheidet sich daran, welches Produkt in der Meta-App eingerichtet ist:
+
+| | **Instagram-Login** (hier verwendet) | Facebook-Login |
+|---|---|---|
+| Server | `graph.instagram.com` | `graph.facebook.com` |
+| Facebook-Seite | **nicht nötig** | nötig |
+| Berechtigungen | `instagram_business_basic`, `instagram_business_content_publish` | `instagram_basic`, `instagram_content_publish`, `pages_read_engagement` |
+| Token | Instagram-Nutzer-Token | Seiten- oder Nutzer-Token |
+| Schalter im Skript | `--api instagram` (Vorgabe) | `--api facebook` |
+
+Der Instagram-Login ist für einen einzelnen eigenen Kanal der schlankere Weg.
+Wer im Graph API Explorer ein *Seiten-Zugriffstoken* anfordert und
+**„Invalid platform app“** zu sehen bekommt, ist genau in diesem Punkt falsch
+abgebogen: Seiten-Token gibt es nur beim Facebook-Login.
 
 ## Was einmalig einzurichten ist
 
 | Schritt | Was zu tun ist |
 |---|---|
-| 1 | Neues Instagram-Konto anlegen und in den Einstellungen auf **Profi-Konto** umstellen (Business oder Creator). |
-| 2 | Eine **Facebook-Seite** anlegen und mit dem Instagram-Konto verknüpfen. Ohne Seite kein API-Zugang. |
-| 3 | Auf [developers.facebook.com](https://developers.facebook.com) eine **App** anlegen (Typ „Business“) und das Produkt *Instagram* hinzufügen. |
-| 4 | Berechtigungen anfordern: `instagram_business_basic` und `instagram_business_content_publish` (bei Anmeldung über Facebook: `instagram_basic`, `instagram_content_publish`, `pages_read_engagement`). |
-| 5 | **Langlebiges Zugriffstoken** erzeugen (60 Tage gültig, davor verlängerbar) und die **Instagram-User-ID** notieren. |
-| 6 | **App Review** bei Meta einreichen. Solange die App im Entwicklungsmodus ist, kann sie nur Konten bedienen, die eine Rolle in der App haben. Für den eigenen Kanal reicht das oft schon – ohne Review geht es nur nicht öffentlich für fremde Konten. Die Prüfung dauert erfahrungsgemäß zwei bis vier Wochen. |
+| 1 | Instagram-Konto auf **Profi-Konto** umstellen: *Einstellungen und Privatsphäre → Kontoart und Tools → Zu professionellem Konto wechseln*. Kostet nichts und verlangt keine Werbung. |
+| 2 | Auf [developers.facebook.com](https://developers.facebook.com) eine **App** anlegen und das Produkt *Instagram* mit **Instagram-Login** hinzufügen. |
+| 3 | Berechtigungen anfordern: `instagram_business_basic` und `instagram_business_content_publish`. |
+| 4 | Im Graph API Explorer den blauen Knopf **„Generate Instagram Access Token“** drücken – *nicht* „Seiten-Zugriffstoken anfordern“. |
+| 5 | Konto-ID auslesen und Token verlängern (beides kann `instagram_post.py`, siehe unten). |
+| 6 | **App Review** nur nötig, um fremde Konten zu bedienen. Für den eigenen Kanal reicht der Entwicklungsmodus, solange das Konto eine Rolle in der App hat. |
+
+### Konto-ID und langlebiges Token
+
+```bash
+# Kurzlebiges Token aus dem Explorer (gilt etwa eine Stunde)
+export IG_ACCESS_TOKEN=IGAA...
+
+# 1. Die numerische Konto-ID auslesen
+python instagram_post.py --whoami
+# -> IG_USER_ID=17841400000000000   (Konto @wettergeschichte)
+
+# 2. Gegen ein 60-Tage-Token tauschen (App-Geheimnis aus den App-Einstellungen)
+python instagram_post.py --exchange-token "$IG_ACCESS_TOKEN" --app-secret GEHEIM
+
+# 3. Später verlängern – geht ab 24 Stunden Alter, nötig vor Ablauf der 60 Tage
+python instagram_post.py --refresh-token
+```
+
+Wichtig beim Instagram-Login: die gesuchte Zahl steht in **`user_id`**, nicht
+in `id`. Letzteres ist eine app-bezogene Kennung und funktioniert nicht als
+`IG_USER_ID`.
 
 ## Was die API vom Bild verlangt
 

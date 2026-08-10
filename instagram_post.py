@@ -1,31 +1,42 @@
 #!/usr/bin/env python3
-"""Veröffentlicht ein fertiges Bild samt Bildtext auf Instagram (Graph API).
+"""Veröffentlicht ein fertiges Bild samt Bildtext auf Instagram.
 
-Ablauf der Instagram Content Publishing API – immer zweistufig:
+Meta bietet zwei getrennte Wege an; welcher gilt, hängt davon ab, welches
+Produkt in der Meta-App eingerichtet ist:
 
-1. ``POST /{ig-user-id}/media``          Container anlegen (Bild-URL + Caption)
+* ``--api instagram``  Instagram-Login, Aufrufe gegen ``graph.instagram.com``.
+  Braucht keine Facebook-Seite. Berechtigungen ``instagram_business_basic``
+  und ``instagram_business_content_publish``. Das ist die Vorgabe.
+* ``--api facebook``   Facebook-Login, Aufrufe gegen ``graph.facebook.com``.
+  Braucht eine verknüpfte Facebook-Seite und ein Seiten- oder Nutzer-Token.
+
+Der Veröffentlichungsablauf ist in beiden Fällen derselbe – immer dreistufig:
+
+1. ``POST /{ig-user-id}/media``                 Container anlegen (Bild-URL + Text)
 2. ``GET  /{container-id}?fields=status_code``  warten, bis ``FINISHED``
-3. ``POST /{ig-user-id}/media_publish``  Container veröffentlichen
+3. ``POST /{ig-user-id}/media_publish``         Container veröffentlichen
 
 Der Haken: **die API lädt keine Datei hoch.** Sie holt sich das Bild von einer
-öffentlich erreichbaren URL. Die JPGs aus ``output/`` müssen also vorher
-irgendwo liegen, wo Meta sie abrufen kann (GitHub Pages, S3, eigener Webspace).
-Siehe INSTAGRAM.md.
+öffentlich erreichbaren URL. Siehe INSTAGRAM.md.
 
-Voraussetzungen:
+Hilfsaufrufe, die kein Bild brauchen:
+
+    python instagram_post.py --whoami                    # ID und Kontoname zeigen
+    python instagram_post.py --exchange-token KURZ_TOKEN --app-secret GEHEIM
+    python instagram_post.py --refresh-token             # verlängert um 60 Tage
+
+Veröffentlichen:
 
     export IG_USER_ID=17841400000000000
-    export IG_ACCESS_TOKEN=EAAG...          # langlebiges Token
-
-Aufruf:
+    export IG_ACCESS_TOKEN=IGAA...
 
     # zeigt nur, was passieren würde (Standard)
     python instagram_post.py --image-url https://example.org/wetter.jpg \\
-        --caption-file output/instagram_nyt_04931_2026.txt
+        --caption-file posts/drei_tage_04931_2026-08-09/text.txt
 
     # tatsächlich veröffentlichen
     python instagram_post.py --image-url https://example.org/wetter.jpg \\
-        --caption-file output/instagram_nyt_04931_2026.txt --publish
+        --caption-file posts/drei_tage_04931_2026-08-09/text.txt --publish
 """
 
 from __future__ import annotations
@@ -40,13 +51,19 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-#: Aktuelle Graph-API-Version (Stand Februar 2026). Ältere Versionen laufen aus,
-#: deshalb bewusst als Option und nicht fest verdrahtet.
+#: Aktuelle Graph-API-Version (Stand Februar 2026). Ältere laufen aus,
+#: deshalb als Option und nicht fest verdrahtet.
 DEFAULT_API_VERSION = "v25.0"
-GRAPH = "https://graph.facebook.com"
+
+HOSTS = {
+    "instagram": "https://graph.instagram.com",
+    "facebook": "https://graph.facebook.com",
+}
 
 #: Instagram erlaubt 100 API-Posts je Konto in 24 Stunden.
 DAILY_LIMIT = 100
+
+MAX_CAPTION = 2200
 
 
 class GraphError(RuntimeError):
@@ -71,6 +88,11 @@ def _call(method: str, url: str, params: dict) -> dict:
         raise GraphError(f"{exc.code} {exc.reason}: {message}") from None
 
 
+# --------------------------------------------------------------------------- #
+# Veröffentlichen
+# --------------------------------------------------------------------------- #
+
+
 def create_container(base: str, ig_user: str, token: str, image_url: str, caption: str) -> str:
     res = _call("POST", f"{base}/{ig_user}/media",
                 {"image_url": image_url, "caption": caption, "access_token": token})
@@ -89,7 +111,10 @@ def wait_ready(base: str, container: str, token: str, timeout: int = 180) -> Non
         if status == "FINISHED":
             return
         if status == "ERROR":
-            raise GraphError(f"Instagram konnte das Bild nicht verarbeiten: {res.get('status')}")
+            raise GraphError(
+                f"Instagram konnte das Bild nicht verarbeiten: {res.get('status')}. "
+                "Häufigste Ursache: die Bild-URL ist von außen nicht erreichbar."
+            )
         if time.monotonic() > deadline:
             raise GraphError(f"Zeitüberschreitung, Status blieb bei {status!r}")
         time.sleep(3)
@@ -115,34 +140,137 @@ def quota_used(base: str, ig_user: str, token: str) -> tuple[int, int] | None:
     return int(entry.get("quota_usage", 0)), int(limit)
 
 
+# --------------------------------------------------------------------------- #
+# Hilfsaufrufe rund um Konto und Token
+# --------------------------------------------------------------------------- #
+
+
+def whoami(api: str, base: str, token: str) -> dict:
+    """Liefert die numerische Konto-ID und den Kontonamen.
+
+    Beim Instagram-Login steht die gesuchte ID in ``user_id``; ``id`` ist eine
+    andere, app-bezogene Kennung und taugt nicht als IG_USER_ID.
+    """
+    if api == "instagram":
+        return _call("GET", f"{base}/me",
+                     {"fields": "user_id,username", "access_token": token})
+    # Beim Facebook-Login führt der Weg über die Seite.
+    pages = _call("GET", f"{base}/me/accounts",
+                  {"fields": "id,name", "access_token": token})
+    out: dict = {"pages": pages.get("data", [])}
+    for page in out["pages"]:
+        linked = _call("GET", f"{base}/{page['id']}",
+                       {"fields": "instagram_business_account{id,username}",
+                        "access_token": token})
+        page["instagram_business_account"] = linked.get("instagram_business_account")
+    return out
+
+
+def exchange_token(api: str, short_token: str, app_secret: str) -> dict:
+    """Kurzlebiges Token (etwa eine Stunde) gegen ein langlebiges (60 Tage) tauschen."""
+    if api == "instagram":
+        return _call("GET", f"{HOSTS['instagram']}/access_token",
+                     {"grant_type": "ig_exchange_token",
+                      "client_secret": app_secret, "access_token": short_token})
+    raise GraphError(
+        "Beim Facebook-Login braucht der Tausch zusätzlich die App-ID:\n"
+        "  curl 'https://graph.facebook.com/" + DEFAULT_API_VERSION + "/oauth/access_token"
+        "?grant_type=fb_exchange_token&client_id=<APP_ID>"
+        "&client_secret=<APP_SECRET>&fb_exchange_token=<KURZ_TOKEN>'"
+    )
+
+
+def refresh_token(api: str, token: str) -> dict:
+    """Langlebiges Token um weitere 60 Tage verlängern.
+
+    Geht erst, wenn das Token mindestens 24 Stunden alt ist. Nach 60 Tagen
+    ohne Verlängerung ist es endgültig hinüber.
+    """
+    if api == "instagram":
+        return _call("GET", f"{HOSTS['instagram']}/refresh_access_token",
+                     {"grant_type": "ig_refresh_token", "access_token": token})
+    raise GraphError(
+        "Beim Facebook-Login laufen Seiten-Token, die aus einem langlebigen "
+        "Nutzer-Token stammen, nicht ab – eine Verlängerung entfällt."
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Kommandozeile
+# --------------------------------------------------------------------------- #
+
+
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--image-url", required=True,
-                    help="öffentlich erreichbare URL des JPEGs (kein lokaler Pfad!)")
-    group = ap.add_mutually_exclusive_group(required=True)
-    group.add_argument("--caption", help="Bildtext direkt")
-    group.add_argument("--caption-file", type=Path, help="Bildtext aus Datei")
-    ap.add_argument("--publish", action="store_true",
-                    help="wirklich veröffentlichen (ohne dieses Flag nur Vorschau)")
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--api", choices=list(HOSTS), default=os.environ.get("IG_API", "instagram"),
+                    help="welcher Produktweg der Meta-App (Vorgabe: instagram)")
     ap.add_argument("--api-version", default=DEFAULT_API_VERSION)
     ap.add_argument("--ig-user-id", default=os.environ.get("IG_USER_ID"))
     ap.add_argument("--access-token", default=os.environ.get("IG_ACCESS_TOKEN"))
+
+    ap.add_argument("--image-url", help="öffentlich erreichbare URL des JPEGs (kein lokaler Pfad!)")
+    caption = ap.add_mutually_exclusive_group()
+    caption.add_argument("--caption", help="Bildtext direkt")
+    caption.add_argument("--caption-file", type=Path, help="Bildtext aus Datei")
+    ap.add_argument("--publish", action="store_true",
+                    help="wirklich veröffentlichen (ohne dieses Flag nur Vorschau)")
+
+    tools = ap.add_argument_group("Hilfsaufrufe (brauchen kein Bild)")
+    tools.add_argument("--whoami", action="store_true", help="Konto-ID und Kontonamen zeigen")
+    tools.add_argument("--exchange-token", metavar="KURZ_TOKEN",
+                       help="kurzlebiges Token gegen ein 60-Tage-Token tauschen")
+    tools.add_argument("--app-secret", default=os.environ.get("IG_APP_SECRET"),
+                       help="App-Geheimnis, nur für --exchange-token")
+    tools.add_argument("--refresh-token", action="store_true",
+                       help="langlebiges Token um 60 Tage verlängern")
     args = ap.parse_args(argv)
 
-    caption = args.caption if args.caption else args.caption_file.read_text(encoding="utf-8")
-    caption = caption.strip()
-    if len(caption) > 2200:
-        print(f"Warnung: Bildtext ist {len(caption)} Zeichen lang, Instagram kürzt bei 2200.")
+    base = f"{HOSTS[args.api]}/{args.api_version}"
 
-    base = f"{GRAPH}/{args.api_version}"
+    # ---- Hilfsaufrufe --------------------------------------------------- #
+    if args.whoami or args.refresh_token or args.exchange_token:
+        try:
+            if args.exchange_token:
+                if not args.app_secret:
+                    print("--app-secret fehlt (oder IG_APP_SECRET setzen).", file=sys.stderr)
+                    return 2
+                res = exchange_token(args.api, args.exchange_token, args.app_secret)
+                print(json.dumps(res, indent=2))
+                print("\nDieses Token als IG_ACCESS_TOKEN in post_daily.conf eintragen.")
+                return 0
+            if not args.access_token:
+                print("IG_ACCESS_TOKEN fehlt (oder --access-token angeben).", file=sys.stderr)
+                return 2
+            if args.refresh_token:
+                print(json.dumps(refresh_token(args.api, args.access_token), indent=2))
+                return 0
+            res = whoami(args.api, base, args.access_token)
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+            if args.api == "instagram" and "user_id" in res:
+                print(f"\nIG_USER_ID={res['user_id']}   (Konto @{res.get('username', '?')})")
+            return 0
+        except GraphError as exc:
+            print(f"Instagram-API meldet: {exc}", file=sys.stderr)
+            return 1
+
+    # ---- Veröffentlichen ------------------------------------------------ #
+    if not args.image_url or not (args.caption or args.caption_file):
+        ap.error("--image-url und --caption/--caption-file werden zum Veröffentlichen gebraucht")
+
+    text = args.caption if args.caption else args.caption_file.read_text(encoding="utf-8")
+    text = text.strip()
+    if len(text) > MAX_CAPTION:
+        print(f"Warnung: Bildtext ist {len(text)} Zeichen lang, Instagram kürzt bei {MAX_CAPTION}.")
 
     if not args.publish:
         print("Vorschau (nichts gesendet – zum Veröffentlichen --publish angeben)\n")
+        print(f"  Produktweg {args.api}")
         print(f"  Endpunkt   {base}/{args.ig_user_id or '<IG_USER_ID>'}/media")
         print(f"  Bild-URL   {args.image_url}")
-        print(f"  Zeichen    {len(caption)}")
+        print(f"  Zeichen    {len(text)}")
         print("\n--- Bildtext ---")
-        print(caption)
+        print(text)
         return 0
 
     if not args.ig_user_id or not args.access_token:
@@ -157,7 +285,7 @@ def main(argv=None) -> int:
 
         print("Container anlegen …")
         container = create_container(base, args.ig_user_id, args.access_token,
-                                     args.image_url, caption)
+                                     args.image_url, text)
         print(f"  Container {container}")
 
         print("auf Verarbeitung warten …")
