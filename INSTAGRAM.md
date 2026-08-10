@@ -38,20 +38,30 @@ Für das Format: das breite 16:9-Diagramm wird im Feed winzig dargestellt.
 `instagram_card.py` erzeugt deshalb eine eigene Fassung im Hochformat
 1080 × 1350 (4:5) – das ist das größte Format, das Instagram im Feed zulässt.
 
-## Wo die Bilder liegen können
+## Wo die Bilder liegen
 
-Irgendein Ort, den Meta per HTTPS abrufen kann. Der Reihe nach von einfach
-nach flexibel:
+In diesem Projekt: im eigenen Repository
+[wettergeschichtebilder](https://github.com/volkerreichenberger/wettergeschichtebilder),
+ausgeliefert über GitHub Pages. `post_daily.sh` kopiert das fertige JPEG dorthin,
+committet, pusht – und übergibt Instagram die URL
 
-* **GitHub Pages** – ein `docs/`-Ordner im Repository, der bei jedem Push
-  automatisch unter `https://<user>.github.io/<repo>/…` liegt. Kostet nichts,
-  braucht keinen Server.
-* **Cloudflare R2 / Backblaze B2 / S3** – ein Bucket mit öffentlichem
-  Lesezugriff. Für viele Bilder die sauberste Lösung.
-* **Eigener Webspace** – per `scp` hochladen, fertig.
+```
+https://volkerreichenberger.github.io/wettergeschichtebilder/<name>.jpg
+```
+
+Das kostet nichts und braucht keinen Server. Der Pfad steht in
+`post_daily.conf` (`BILDER=…`); liegt das Repository woanders, nur dort ändern.
+
+Andere Wege wären ein S3-kompatibler Speicher (Cloudflare R2, Backblaze B2)
+oder eigener Webspace per `scp` – Vorlagen dafür stehen in
+`post_daily.conf.example`.
 
 Die URL muss zum Zeitpunkt des Postens erreichbar sein. Danach kann das Bild
-wieder verschwinden; Instagram hat es dann bereits kopiert.
+wieder verschwinden; Instagram hat es dann bereits kopiert. **Achtung:** Nach
+dem Push braucht GitHub Pages typischerweise ein bis zwei Minuten, bis die
+Datei ausgeliefert wird – `post_daily.sh` sollte also nicht unmittelbar nach
+dem Upload veröffentlichen. Falls Instagram `ERROR` meldet, ist das die erste
+Ursache, die zu prüfen ist.
 
 ## Der eigentliche Post
 

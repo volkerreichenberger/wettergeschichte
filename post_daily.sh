@@ -18,7 +18,8 @@ cd "$(dirname "$0")"
 PYTHON="${PYTHON:-python3}"
 STATION=4931
 VARIANTE="nyt-h1"
-PUBLISH=0
+UPLOAD=0     # Bild wirklich hochladen
+PUBLISH=0    # Beitrag wirklich veröffentlichen
 SKIP_FETCH=0
 
 # ---------------------------------------------------------------------------
@@ -29,8 +30,9 @@ SKIP_FETCH=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --publish)    PUBLISH=1 ;;
-    --skip-fetch) SKIP_FETCH=1 ;;
+    --publish)     UPLOAD=1; PUBLISH=1 ;;
+    --upload-only) UPLOAD=1 ;;   # Bildablage testen, ohne zu veröffentlichen
+    --skip-fetch)  SKIP_FETCH=1 ;;
     --station)    STATION="$2"; shift ;;
     --variante)   VARIANTE="$2"; shift ;;
     -h|--help)    sed -n '2,15p' "$0"; exit 0 ;;
@@ -93,8 +95,9 @@ if [ -n "${WG_UPLOAD_CMD:-}" ] && [ -n "${WG_PUBLIC_URL:-}" ]; then
   CMD="${CMD//\{name\}/$REMOTE_NAME}"
   URL="${WG_PUBLIC_URL//\{name\}/$REMOTE_NAME}"
   echo "-- Bild hochladen: $CMD"
-  if [ "$PUBLISH" -eq 1 ]; then
+  if [ "$UPLOAD" -eq 1 ]; then
     eval "$CMD"
+    echo "   liegt unter $URL"
   else
     echo "   (Trockenlauf – nicht ausgeführt)"
   fi
@@ -105,6 +108,10 @@ else
     echo "   Ohne öffentlich erreichbare Bild-URL kann nicht veröffentlicht werden." >&2
     exit 1
   fi
+fi
+
+if [ "$PUBLISH" -eq 0 ] && [ "$UPLOAD" -eq 1 ]; then
+  echo "== Bild hochgeladen, nicht veröffentlicht (--upload-only)"
 fi
 
 # ---------------------------------------------------------------------------
