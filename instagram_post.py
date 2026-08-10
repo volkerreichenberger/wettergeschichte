@@ -49,6 +49,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import date, timedelta
 from pathlib import Path
 
 #: Aktuelle Graph-API-Version (Stand Februar 2026). Ältere laufen aus,
@@ -202,6 +203,61 @@ def exchange_token(api: str, short_token: str, app_secret: str) -> dict:
     )
 
 
+def days_left(expires: str | None) -> int | None:
+    """Verbleibende Gültigkeit in Tagen, oder None wenn unbekannt."""
+    if not expires:
+        return None
+    try:
+        return (date.fromisoformat(expires.strip()) - date.today()).days
+    except ValueError:
+        return None
+
+
+def write_conf(path: Path, token: str, expires: str) -> None:
+    """Token und Ablaufdatum in post_daily.conf ersetzen oder anhängen."""
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    out, seen = [], set()
+    for line in lines:
+        for key, value in (("IG_ACCESS_TOKEN", token), ("IG_TOKEN_EXPIRES", expires)):
+            if line.startswith(f"export {key}="):
+                out.append(f"export {key}={value}")
+                seen.add(key)
+                break
+        else:
+            out.append(line)
+    for key, value in (("IG_ACCESS_TOKEN", token), ("IG_TOKEN_EXPIRES", expires)):
+        if key not in seen:
+            out.append(f"export {key}={value}")
+    path.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
+def ensure_token(api: str, token: str, expires: str | None, min_days: int,
+                 conf: Path | None) -> str:
+    """Verlängert das Token, wenn es bald abläuft. Gibt das gültige Token zurück.
+
+    Instagram lässt eine Verlängerung erst zu, wenn das Token 24 Stunden alt
+    ist, und nach Ablauf gar nicht mehr. Deshalb wird früh genug erneuert und
+    nicht erst am letzten Tag.
+    """
+    left = days_left(expires)
+    if left is not None and left > min_days:
+        print(f"Token gültig, noch {left} Tage – keine Verlängerung nötig.")
+        return token
+
+    grund = "Ablaufdatum unbekannt" if left is None else f"nur noch {left} Tage"
+    print(f"Token wird verlängert ({grund}).")
+    res = refresh_token(api, token)
+    new_token = res.get("access_token")
+    if not new_token:
+        raise GraphError(f"unerwartete Antwort beim Verlängern: {res}")
+    neu = date.today() + timedelta(seconds=int(res.get("expires_in", 0)))
+    print(f"Neues Token gültig bis {neu.isoformat()}.")
+    if conf:
+        write_conf(conf, new_token, neu.isoformat())
+        print(f"In {conf} eingetragen.")
+    return new_token
+
+
 def refresh_token(api: str, token: str) -> dict:
     """Langlebiges Token um weitere 60 Tage verlängern.
 
@@ -249,11 +305,34 @@ def main(argv=None) -> int:
                        help="App-Geheimnis, nur für --exchange-token")
     tools.add_argument("--refresh-token", action="store_true",
                        help="langlebiges Token um 60 Tage verlängern")
+    tools.add_argument("--ensure-token", action="store_true",
+                       help="Token nur verlängern, wenn es bald abläuft")
+    tools.add_argument("--min-days", type=int, default=14,
+                       help="ab wie wenigen Resttagen --ensure-token verlängert")
+    tools.add_argument("--conf", type=Path,
+                       help="Datei, in die das erneuerte Token geschrieben wird")
+    tools.add_argument("--token-expires", default=os.environ.get("IG_TOKEN_EXPIRES"),
+                       help="bekanntes Ablaufdatum, ISO-Format")
     args = ap.parse_args(argv)
 
     base = f"{HOSTS[args.api]}/{args.api_version}"
 
     # ---- Hilfsaufrufe --------------------------------------------------- #
+    if args.ensure_token:
+        if not args.access_token:
+            print("IG_ACCESS_TOKEN fehlt (oder --access-token angeben).", file=sys.stderr)
+            return 2
+        try:
+            token = ensure_token(args.api, args.access_token, args.token_expires,
+                                 args.min_days, args.conf)
+        except GraphError as exc:
+            print(f"Instagram-API meldet: {exc}", file=sys.stderr)
+            return 1
+        # Letzte Zeile maschinenlesbar, damit post_daily.sh das Token
+        # uebernehmen kann, ohne die ganze Konfiguration neu einzulesen.
+        print(f"IG_ACCESS_TOKEN={token}")
+        return 0
+
     if args.whoami or args.refresh_token or args.exchange_token:
         try:
             if args.exchange_token:

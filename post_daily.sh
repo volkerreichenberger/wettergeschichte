@@ -75,6 +75,26 @@ esac
 echo "== Wettergeschichte, Variante $VARIANTE, Station $STATION"
 
 # ---------------------------------------------------------------------------
+# 0. Token prüfen und bei Bedarf verlängern
+# ---------------------------------------------------------------------------
+# Das Instagram-Token gilt 60 Tage. Läuft es ab, steht der Cronjob still, und
+# neu erzeugen ginge nur von Hand im Dashboard. Deshalb rechtzeitig erneuern –
+# Instagram lässt das erst ab 24 Stunden Alter zu, nach Ablauf gar nicht mehr.
+if [ -n "${IG_ACCESS_TOKEN:-}" ]; then
+  echo "-- Zugriffstoken"
+  TOKEN_OUT="$("$PYTHON" instagram_post.py --ensure-token --conf post_daily.conf \
+               --min-days "${TOKEN_MIN_DAYS:-14}" || true)"
+  echo "$TOKEN_OUT" | grep -v '^IG_ACCESS_TOKEN=' | sed 's/^/   /'
+  NEW_TOKEN="$(printf '%s\n' "$TOKEN_OUT" | sed -n 's/^IG_ACCESS_TOKEN=//p' | tail -1)"
+  if [ -n "$NEW_TOKEN" ]; then
+    export IG_ACCESS_TOKEN="$NEW_TOKEN"
+  elif [ "$PUBLISH" -eq 1 ]; then
+    echo "   Token konnte nicht geprüft werden – Abbruch." >&2
+    exit 1
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # 1. Daten aktualisieren
 # ---------------------------------------------------------------------------
 if [ "$SKIP_FETCH" -eq 0 ]; then

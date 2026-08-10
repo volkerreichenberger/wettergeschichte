@@ -40,23 +40,29 @@ abgebogen: Seiten-Token gibt es nur beim Facebook-Login.
 ### Konto-ID und langlebiges Token
 
 ```bash
-# Kurzlebiges Token aus dem Explorer (gilt etwa eine Stunde)
-export IG_ACCESS_TOKEN=IGAA...
+export IG_ACCESS_TOKEN=IGAA...          # Token aus dem Dashboard
 
-# 1. Die numerische Konto-ID auslesen
 python instagram_post.py --whoami
-# -> IG_USER_ID=17841400000000000   (Konto @wettergeschichte)
-
-# 2. Gegen ein 60-Tage-Token tauschen (App-Geheimnis aus den App-Einstellungen)
-python instagram_post.py --exchange-token "$IG_ACCESS_TOKEN" --app-secret GEHEIM
-
-# 3. Später verlängern – geht ab 24 Stunden Alter, nötig vor Ablauf der 60 Tage
-python instagram_post.py --refresh-token
+# -> IG_USER_ID=17841439243436075   (Konto @wettergeschichte)
 ```
 
-Wichtig beim Instagram-Login: die gesuchte Zahl steht in **`user_id`**, nicht
-in `id`. Letzteres ist eine app-bezogene Kennung und funktioniert nicht als
-`IG_USER_ID`.
+Zwei Fallstricke:
+
+* Die gesuchte Zahl steht in **`user_id`**, nicht in `id`. Letzteres ist eine
+  app-bezogene Kennung und funktioniert nicht als `IG_USER_ID`.
+* **Das im Dashboard erzeugte Token ist bereits langlebig** (60 Tage). Ein
+  Tausch über `--exchange-token` scheitert deshalb mit „Session key invalid" –
+  es gibt nichts zu tauschen. Verlängert wird mit `--refresh-token`.
+
+### Das Token läuft nicht ab
+
+`post_daily.sh` prüft bei jedem Lauf, wie lange das Token noch gilt, und
+verlängert es, sobald weniger als 14 Tage bleiben (`TOKEN_MIN_DAYS`). Das neue
+Token und sein Ablaufdatum schreibt es selbst in `post_daily.conf`.
+
+Das muss automatisch geschehen: Instagram verlängert nur Token, die mindestens
+24 Stunden alt sind und **noch nicht abgelaufen** sind. Ist die Frist einmal
+verstrichen, hilft nur der Weg über das Dashboard von Hand.
 
 ## Was die API vom Bild verlangt
 
