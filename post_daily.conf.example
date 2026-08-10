@@ -15,9 +15,12 @@ VARIANTE=nyt-h1
 # WG_UPLOAD_CMD='scp {src} web:/var/www/wetter/{name}'
 # WG_PUBLIC_URL='https://example.org/wetter/{name}'
 
-# Variante B: GitHub Pages (docs/-Ordner eines öffentlichen Repositories)
-# WG_UPLOAD_CMD='cp {src} ~/Projekte/wetter-bilder/docs/{name} && git -C ~/Projekte/wetter-bilder add -A && git -C ~/Projekte/wetter-bilder commit -m "{name}" && git -C ~/Projekte/wetter-bilder push'
-# WG_PUBLIC_URL='https://BENUTZERNAME.github.io/wetter-bilder/{name}'
+# Variante B: GitHub Pages – ein eigenes öffentliches Repository für die Bilder.
+# Der Commit wird übersprungen, wenn sich am Bild nichts geändert hat, sonst
+# bricht git mit "nothing to commit" ab und reißt den Lauf mit.
+# BILDER=~/Programming/wettergeschichtebilder
+# WG_UPLOAD_CMD='cp {src} '"$BILDER"'/{name} && git -C '"$BILDER"' add -A && { git -C '"$BILDER"' diff --cached --quiet || git -C '"$BILDER"' commit -q -m "{name}"; } && git -C '"$BILDER"' push -q'
+# WG_PUBLIC_URL='https://BENUTZERNAME.github.io/wettergeschichtebilder/{name}'
 
 # Variante C: S3-kompatibler Speicher (Cloudflare R2, Backblaze B2, AWS)
 # WG_UPLOAD_CMD='aws s3 cp {src} s3://wettergeschichte/{name} --acl public-read'

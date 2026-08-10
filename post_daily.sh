@@ -22,6 +22,11 @@ UPLOAD=0     # Bild wirklich hochladen
 PUBLISH=0    # Beitrag wirklich veröffentlichen
 SKIP_FETCH=0
 
+# GitHub Pages baut nach einem Push erst neu; bis dahin liefert die URL 404.
+# Instagram würde in dieser Zeit mit ERROR abbrechen, deshalb wird gewartet.
+WAIT_SECONDS=300
+WAIT_INTERVAL=10
+
 # ---------------------------------------------------------------------------
 # Einstellungen
 # ---------------------------------------------------------------------------
@@ -41,17 +46,38 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+warte_auf_bild() {
+  # Pollt die öffentliche URL, bis sie 200 liefert. Rückgabe 1 bei Zeitablauf.
+  local url="$1" start=$SECONDS code=""
+  echo "-- warte, bis das Bild ausgeliefert wird (bis zu ${WAIT_SECONDS}s)"
+  while [ $(( SECONDS - start )) -lt "$WAIT_SECONDS" ]; do
+    code="$(curl -s -o /dev/null -w '%{http_code}' -L --max-time 20 "$url" || true)"
+    if [ "$code" = "200" ]; then
+      echo "   erreichbar nach $(( SECONDS - start ))s"
+      return 0
+    fi
+    sleep "$WAIT_INTERVAL"
+  done
+  echo "   nach ${WAIT_SECONDS}s immer noch nicht da (zuletzt HTTP ${code:-?})" >&2
+  return 1
+}
+
 case "$VARIANTE" in
   nyt-jahr)    BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum jahr) ;;
   nyt-h1)      BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum h1) ;;
   nyt-h2)      BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum h2) ;;
   nyt-3monate) BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum monate --months 3) ;;
   drei-tage)   BUILD=(plots/python/drei_tage_matplotlib.py) ;;
+  nyt-halbjahr)
+     # Bis Ende Juni das erste Halbjahr, danach das zweite. Andersherum wäre
+     # das Bild leer: das laufende Halbjahr hat noch keine Daten.
+     if [ "$(date +%-m)" -le 6 ]; then HALBJAHR=h1; else HALBJAHR=h2; fi
+     BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum "$HALBJAHR") ;;
   *) echo "unbekannte Variante: $VARIANTE" >&2
-     echo "möglich: nyt-jahr nyt-h1 nyt-h2 nyt-3monate drei-tage" >&2; exit 2 ;;
+     echo "möglich: nyt-jahr nyt-h1 nyt-h2 nyt-halbjahr nyt-3monate drei-tage" >&2; exit 2 ;;
 esac
 
-echo "== Wettergeschichte, Variante $VARIANTE, Station $STATION"
+echo "== Wettergeschichte, Variante $VARIANTE${HALBJAHR:+ ($HALBJAHR)}, Station $STATION"
 
 # ---------------------------------------------------------------------------
 # 1. Daten aktualisieren
@@ -98,6 +124,11 @@ if [ -n "${WG_UPLOAD_CMD:-}" ] && [ -n "${WG_PUBLIC_URL:-}" ]; then
   if [ "$UPLOAD" -eq 1 ]; then
     eval "$CMD"
     echo "   liegt unter $URL"
+    if ! warte_auf_bild "$URL"; then
+      # Ohne abrufbares Bild scheitert die Instagram-API ohnehin – dann lieber
+      # hier abbrechen, als einen kaputten Container anzulegen.
+      [ "$PUBLISH" -eq 1 ] && { echo "   Abbruch vor dem Veröffentlichen." >&2; exit 1; }
+    fi
   else
     echo "   (Trockenlauf – nicht ausgeführt)"
   fi

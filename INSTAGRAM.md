@@ -115,8 +115,23 @@ Ohne `post_daily.conf` läuft nur der Trockenlauf – so lässt sich der ganze W
 prüfen, bevor Zugangsdaten im Spiel sind. Der Trockenlauf zeigt am Ende den
 fertigen Bildtext und die URL, unter der das Bild liegen müsste.
 
-Als `--variante` stehen `nyt-jahr`, `nyt-h1`, `nyt-h2`, `nyt-3monate` und
-`drei-tage` zur Wahl.
+Als `--variante` stehen zur Wahl:
+
+| Variante | Bild |
+|---|---|
+| `drei-tage` | die letzten drei Tage im Stundenverlauf |
+| `nyt-3monate` | das letzte Quartal |
+| `nyt-halbjahr` | bis Ende Juni das erste, danach das zweite Halbjahr |
+| `nyt-h1` / `nyt-h2` | ein festes Halbjahr |
+| `nyt-jahr` | das ganze Kalenderjahr |
+
+`nyt-halbjahr` ist die Variante für den Automatikbetrieb: das noch nicht
+begonnene Halbjahr wäre ein leeres Bild.
+
+Nach dem Push wartet das Skript, bis GitHub Pages die Datei wirklich
+ausliefert (bis zu fünf Minuten, einstellbar über `WAIT_SECONDS`). Kommt sie
+nicht, bricht es vor dem Veröffentlichen ab, statt bei Instagram einen
+fehlerhaften Container anzulegen.
 
 ```cron
 # jeden Morgen um 8:15
