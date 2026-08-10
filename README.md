@@ -178,14 +178,25 @@ posts/nyt_h1_04931_2026-08-09/text.txt
 Das NYT-Diagramm gibt es in vier Zuschnitten:
 
 ```bash
+python plots/python/nyt_post_matplotlib.py --station 4931 --zeitraum serie
 python plots/python/nyt_post_matplotlib.py --station 4931 --zeitraum jahr
-python plots/python/nyt_post_matplotlib.py --station 4931 --zeitraum h1     # Jan–Jun
-python plots/python/nyt_post_matplotlib.py --station 4931 --zeitraum h2     # Jul–Dez
+python plots/python/nyt_post_matplotlib.py --station 4931 --zeitraum quartal --zurueck 2
 python plots/python/nyt_post_matplotlib.py --station 4931 --zeitraum monate --months 3
 ```
 
+`serie` ist der Regelfall: sechs Bilder in einem Ordner für einen
+Karussell-Beitrag – das Kalenderjahr, die vier jüngsten Quartale mit dem
+laufenden zuletzt, und die Legende als Schlussbild. Die Quartale sind starr am
+Kalender ausgerichtet und reichen im ersten Halbjahr ins Vorjahr zurück, für
+das dann ebenfalls Kennzahlen abgeleitet sein müssen.
+
+Alle Bilder einer Serie teilen sich **eine** Temperaturskala – mit je eigener
+Skala sähe ein kühles Quartal beim Wischen aus wie ein heißes. Und keines der
+Diagramme trägt einen Legendenkasten: er würde je nach Jahreszeit genau die
+Tage verdecken, um die es geht.
+
 Das ganze Jahr im Quadrat funktioniert, wird aber dicht: 365 Tagesbalken auf
-1080 px lassen je Tag knapp drei Pixel. Die beiden Halbjahre sind der bessere
+1080 px lassen je Tag knapp drei Pixel. Ein Quartal ist der bessere
 Kompromiss, wenn die Balken einzeln erkennbar bleiben sollen.
 
 Die ältere Fassung `instagram_card.py` schreibt Titel und Kennzahlen ins Bild

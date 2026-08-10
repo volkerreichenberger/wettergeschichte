@@ -149,16 +149,36 @@ fertigen Bildtext und die URL, unter der das Bild liegen müsste.
 
 Als `--variante` stehen zur Wahl:
 
-| Variante | Bild |
+| Variante | Beitrag |
 |---|---|
+| `serie` | Karussell: Ganzjahresbild, die vier jüngsten Quartale, Legende |
 | `drei-tage` | die letzten drei Tage im Stundenverlauf |
-| `nyt-3monate` | das letzte Quartal |
-| `nyt-halbjahr` | bis Ende Juni das erste, danach das zweite Halbjahr |
-| `nyt-h1` / `nyt-h2` | ein festes Halbjahr |
+| `nyt-quartal` | nur das laufende Quartal |
+| `nyt-3monate` | die letzten drei Monate, gleitend |
 | `nyt-jahr` | das ganze Kalenderjahr |
 
-`nyt-halbjahr` ist die Variante für den Automatikbetrieb: das noch nicht
-begonnene Halbjahr wäre ein leeres Bild.
+### Die Serie
+
+`serie` erzeugt sechs Bilder in einem Ordner und veröffentlicht sie als
+**Karussell-Beitrag**:
+
+1. das laufende Kalenderjahr
+2.–5. die vier jüngsten Quartale, das laufende zuletzt
+6. die Legende
+
+Die Quartale sind starr am Kalender ausgerichtet (Jan–Mär, Apr–Jun, Jul–Sep,
+Okt–Dez). Am 1. April springt die Scheibe um und zeigt zunächst nur einen Tag –
+dafür sind die Bilder untereinander vergleichbar. Die drei Vorgänger reichen im
+ersten Halbjahr ins Vorjahr zurück; `post_daily.sh` leitet die Kennzahlen
+deshalb für das laufende **und** das vorige Jahr ab.
+
+Zwei Dinge, die die Serie erst ehrlich machen:
+
+* **Alle sechs Bilder teilen sich eine Temperaturskala.** Mit je eigener Skala
+  sähe ein kühles Quartal beim Wischen aus wie ein heißes.
+* **Kein Legendenkasten in den Diagrammen.** Er würde je nach Jahreszeit genau
+  die Tage verdecken, um die es geht; stattdessen steht die Legende als eigenes
+  Schlussbild und zusätzlich ausformuliert im Bildtext.
 
 Nach dem Push wartet das Skript, bis GitHub Pages die Datei wirklich
 ausliefert (bis zu fünf Minuten, einstellbar über `WAIT_SECONDS`). Kommt sie

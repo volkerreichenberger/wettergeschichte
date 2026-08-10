@@ -63,21 +63,16 @@ warte_auf_bild() {
 }
 
 case "$VARIANTE" in
+  serie)       BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum serie) ;;
   nyt-jahr)    BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum jahr) ;;
-  nyt-h1)      BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum h1) ;;
-  nyt-h2)      BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum h2) ;;
+  nyt-quartal) BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum quartal) ;;
   nyt-3monate) BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum monate --months 3) ;;
   drei-tage)   BUILD=(plots/python/drei_tage_matplotlib.py) ;;
-  nyt-halbjahr)
-     # Bis Ende Juni das erste Halbjahr, danach das zweite. Andersherum wäre
-     # das Bild leer: das laufende Halbjahr hat noch keine Daten.
-     if [ "$(date +%-m)" -le 6 ]; then HALBJAHR=h1; else HALBJAHR=h2; fi
-     BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum "$HALBJAHR") ;;
   *) echo "unbekannte Variante: $VARIANTE" >&2
-     echo "möglich: nyt-jahr nyt-h1 nyt-h2 nyt-halbjahr nyt-3monate drei-tage" >&2; exit 2 ;;
+     echo "möglich: serie nyt-jahr nyt-quartal nyt-3monate drei-tage" >&2; exit 2 ;;
 esac
 
-echo "== Wettergeschichte, Variante $VARIANTE${HALBJAHR:+ ($HALBJAHR)}, Station $STATION"
+echo "== Wettergeschichte, Variante $VARIANTE, Station $STATION"
 
 # ---------------------------------------------------------------------------
 # 1. Daten aktualisieren
@@ -87,7 +82,10 @@ if [ "$SKIP_FETCH" -eq 0 ]; then
   "$PYTHON" fetch_dwd.py --stations "$STATION"
   "$PYTHON" fetch_hourly.py --stations "$STATION"
   echo "-- Kennzahlen ableiten"
+  # Auch das Vorjahr: die Quartalsserie reicht bis zu drei Quartale zurück und
+  # greift damit im ersten Halbjahr auf das Vorjahr zu.
   "$PYTHON" climatology.py --stations "$STATION"
+  "$PYTHON" climatology.py --stations "$STATION" --year "$(( $(date +%Y) - 1 ))"
 else
   echo "-- Daten übersprungen (--skip-fetch)"
 fi
@@ -105,10 +103,20 @@ if [ -z "$POST_DIR" ] || [ ! -d "$POST_DIR" ]; then
   exit 1
 fi
 
-IMAGE="$POST_DIR/bild.jpg"
 CAPTION="$POST_DIR/text.txt"
-REMOTE_NAME="$(basename "$POST_DIR").jpg"
-[ -f "$IMAGE" ] && [ -f "$CAPTION" ] || { echo "Bild oder Text fehlt in $POST_DIR" >&2; exit 1; }
+[ -f "$CAPTION" ] || { echo "text.txt fehlt in $POST_DIR" >&2; exit 1; }
+
+# Einzelbild heißt bild.jpg, eine Serie bild_1.jpg … bild_n.jpg. Die
+# Sortierung bestimmt die Reihenfolge im Karussell.
+IMAGES=()
+if [ -f "$POST_DIR/bild.jpg" ]; then
+  IMAGES=("$POST_DIR/bild.jpg")
+else
+  while IFS= read -r f; do IMAGES+=("$f"); done < <(ls -1 "$POST_DIR"/bild_*.jpg 2>/dev/null | sort -V)
+fi
+# Unter 'set -u' bricht bash 3.2 an einem leeren Array ab, deshalb ${...[*]:-}.
+[ -n "${IMAGES[*]:-}" ] || { echo "kein Bild in $POST_DIR" >&2; exit 1; }
+echo "   ${#IMAGES[@]} Bild(er)"
 
 # ---------------------------------------------------------------------------
 # 3. Bild öffentlich ablegen
@@ -116,24 +124,35 @@ REMOTE_NAME="$(basename "$POST_DIR").jpg"
 # Die Instagram-API lädt keine Datei hoch, sie holt sie von einer URL.
 # WG_UPLOAD_CMD und WG_PUBLIC_URL kommen aus post_daily.conf; {src} und {name}
 # werden ersetzt.
+URLS=()
 if [ -n "${WG_UPLOAD_CMD:-}" ] && [ -n "${WG_PUBLIC_URL:-}" ]; then
-  CMD="${WG_UPLOAD_CMD//\{src\}/$IMAGE}"
-  CMD="${CMD//\{name\}/$REMOTE_NAME}"
-  URL="${WG_PUBLIC_URL//\{name\}/$REMOTE_NAME}"
-  echo "-- Bild hochladen: $CMD"
-  if [ "$UPLOAD" -eq 1 ]; then
-    eval "$CMD"
-    echo "   liegt unter $URL"
-    if ! warte_auf_bild "$URL"; then
-      # Ohne abrufbares Bild scheitert die Instagram-API ohnehin – dann lieber
-      # hier abbrechen, als einen kaputten Container anzulegen.
-      [ "$PUBLISH" -eq 1 ] && { echo "   Abbruch vor dem Veröffentlichen." >&2; exit 1; }
+  echo "-- Bilder hochladen"
+  for IMAGE in "${IMAGES[@]}"; do
+    REMOTE_NAME="$(basename "$POST_DIR")_$(basename "$IMAGE")"
+    CMD="${WG_UPLOAD_CMD//\{src\}/$IMAGE}"
+    CMD="${CMD//\{name\}/$REMOTE_NAME}"
+    URL="${WG_PUBLIC_URL//\{name\}/$REMOTE_NAME}"
+    URLS+=("$URL")
+    if [ "$UPLOAD" -eq 1 ]; then
+      eval "$CMD"
+      echo "   $REMOTE_NAME"
+    else
+      echo "   $REMOTE_NAME (Trockenlauf – nicht ausgeführt)"
     fi
-  else
-    echo "   (Trockenlauf – nicht ausgeführt)"
+  done
+  # Erst nach dem letzten Push warten: GitHub Pages baut ohnehin alles auf
+  # einmal, und geprüft wird das zuletzt hinzugefügte Bild.
+  # ${URLS[-1]} gibt es erst ab bash 4.3; macOS liefert 3.2.
+  LETZTE="${URLS[$(( ${#URLS[@]} - 1 ))]}"
+  if [ "$UPLOAD" -eq 1 ] && ! warte_auf_bild "$LETZTE"; then
+    # Ohne abrufbares Bild scheitert die Instagram-API ohnehin – dann lieber
+    # hier abbrechen, als einen kaputten Container anzulegen.
+    [ "$PUBLISH" -eq 1 ] && { echo "   Abbruch vor dem Veröffentlichen." >&2; exit 1; }
   fi
 else
-  URL="https://BITTE-NOCH-EINTRAGEN.example/$REMOTE_NAME"
+  for IMAGE in "${IMAGES[@]}"; do
+    URLS+=("https://BITTE-NOCH-EINTRAGEN.example/$(basename "$IMAGE")")
+  done
   echo "-- Kein Upload konfiguriert (WG_UPLOAD_CMD / WG_PUBLIC_URL fehlen)."
   if [ "$PUBLISH" -eq 1 ]; then
     echo "   Ohne öffentlich erreichbare Bild-URL kann nicht veröffentlicht werden." >&2
@@ -142,14 +161,15 @@ else
 fi
 
 if [ "$PUBLISH" -eq 0 ] && [ "$UPLOAD" -eq 1 ]; then
-  echo "== Bild hochgeladen, nicht veröffentlicht (--upload-only)"
+  echo "== Bilder hochgeladen, nicht veröffentlicht (--upload-only)"
 fi
 
 # ---------------------------------------------------------------------------
 # 4. Veröffentlichen
 # ---------------------------------------------------------------------------
 echo "-- Instagram"
-ARGS=(instagram_post.py --image-url "$URL" --caption-file "$CAPTION")
+ARGS=(instagram_post.py --caption-file "$CAPTION")
+for URL in "${URLS[@]}"; do ARGS+=(--image-url "$URL"); done
 [ "$PUBLISH" -eq 1 ] && ARGS+=(--publish)
 "$PYTHON" "${ARGS[@]}"
 

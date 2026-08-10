@@ -110,7 +110,12 @@ def clim_doy(ts) -> int:
     return doy - 1 if (ts.is_leap_year and doy > 59) else doy
 
 
-def draw(clim, year_df, summary, ax, window=(1, wg.MONTH_END)) -> None:
+def draw(clim, year_df, summary, ax, window=(1, wg.MONTH_END), ylim=None) -> None:
+    """``ylim`` erzwingt eine feste Temperaturskala.
+
+    Für eine Bilderserie unverzichtbar: blättert man durch mehrere Ausschnitte
+    mit je eigener Skala, sieht ein kühles Quartal aus wie ein heißes.
+    """
     lo, hi = window
     clim = clim[(clim["doy"] >= lo) & (clim["doy"] <= hi)]
     year_df = year_df[(year_df["doy"] >= lo) & (year_df["doy"] <= hi)]
@@ -146,8 +151,11 @@ def draw(clim, year_df, summary, ax, window=(1, wg.MONTH_END)) -> None:
 
     ax.axhline(0, color=wg.GRID, lw=0.8, ls=(0, (4, 4)), zorder=2)
 
-    ymin = min(clim["record_low"].min(), year_df["temp_min_c"].min()) - 2
-    ymax = max(clim["record_high"].max(), year_df["temp_max_c"].max()) + 6
+    if ylim is not None:
+        ymin, ymax = ylim
+    else:
+        ymin = min(clim["record_low"].min(), year_df["temp_min_c"].min()) - 2
+        ymax = max(clim["record_high"].max(), year_df["temp_max_c"].max()) + 6
     month_axis(ax, ymin, ymax, window)
 
     ticks = range(int(ymin // 5 * 5), int(ymax) + 5, 5)

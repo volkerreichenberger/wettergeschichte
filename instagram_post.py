@@ -93,11 +93,33 @@ def _call(method: str, url: str, params: dict) -> dict:
 # --------------------------------------------------------------------------- #
 
 
+#: Instagram nimmt höchstens zehn Bilder in einen Karussell-Beitrag.
+MAX_CAROUSEL = 10
+
+
 def create_container(base: str, ig_user: str, token: str, image_url: str, caption: str) -> str:
     res = _call("POST", f"{base}/{ig_user}/media",
                 {"image_url": image_url, "caption": caption, "access_token": token})
     if "id" not in res:
         raise GraphError(f"unerwartete Antwort beim Anlegen des Containers: {res}")
+    return res["id"]
+
+
+def create_child(base: str, ig_user: str, token: str, image_url: str) -> str:
+    """Einzelbild eines Karussells – trägt keinen eigenen Bildtext."""
+    res = _call("POST", f"{base}/{ig_user}/media",
+                {"image_url": image_url, "is_carousel_item": "true", "access_token": token})
+    if "id" not in res:
+        raise GraphError(f"unerwartete Antwort beim Anlegen eines Karussell-Bildes: {res}")
+    return res["id"]
+
+
+def create_carousel(base: str, ig_user: str, token: str, children: list[str], caption: str) -> str:
+    res = _call("POST", f"{base}/{ig_user}/media",
+                {"media_type": "CAROUSEL", "children": ",".join(children),
+                 "caption": caption, "access_token": token})
+    if "id" not in res:
+        raise GraphError(f"unerwartete Antwort beim Anlegen des Karussells: {res}")
     return res["id"]
 
 
@@ -209,7 +231,10 @@ def main(argv=None) -> int:
     ap.add_argument("--ig-user-id", default=os.environ.get("IG_USER_ID"))
     ap.add_argument("--access-token", default=os.environ.get("IG_ACCESS_TOKEN"))
 
-    ap.add_argument("--image-url", help="öffentlich erreichbare URL des JPEGs (kein lokaler Pfad!)")
+    ap.add_argument("--image-url", action="append", metavar="URL",
+                    help="öffentlich erreichbare URL des JPEGs (kein lokaler Pfad!). "
+                         "Mehrfach angeben ergibt einen Karussell-Beitrag; "
+                         "die Reihenfolge ist die Reihenfolge im Beitrag.")
     caption = ap.add_mutually_exclusive_group()
     caption.add_argument("--caption", help="Bildtext direkt")
     caption.add_argument("--caption-file", type=Path, help="Bildtext aus Datei")
@@ -263,11 +288,19 @@ def main(argv=None) -> int:
     if len(text) > MAX_CAPTION:
         print(f"Warnung: Bildtext ist {len(text)} Zeichen lang, Instagram kürzt bei {MAX_CAPTION}.")
 
+    urls: list[str] = args.image_url
+    if len(urls) > MAX_CAROUSEL:
+        print(f"Instagram nimmt höchstens {MAX_CAROUSEL} Bilder je Beitrag, "
+              f"angegeben sind {len(urls)}.", file=sys.stderr)
+        return 2
+
     if not args.publish:
         print("Vorschau (nichts gesendet – zum Veröffentlichen --publish angeben)\n")
         print(f"  Produktweg {args.api}")
         print(f"  Endpunkt   {base}/{args.ig_user_id or '<IG_USER_ID>'}/media")
-        print(f"  Bild-URL   {args.image_url}")
+        print(f"  Art        {'Karussell mit %d Bildern' % len(urls) if len(urls) > 1 else 'Einzelbild'}")
+        for i, url in enumerate(urls, start=1):
+            print(f"  Bild {i}     {url}")
         print(f"  Zeichen    {len(text)}")
         print("\n--- Bildtext ---")
         print(text)
@@ -283,9 +316,22 @@ def main(argv=None) -> int:
         if used:
             print(f"Kontingent: {used[0]} von {used[1]} Posts in den letzten 24 h verbraucht")
 
-        print("Container anlegen …")
-        container = create_container(base, args.ig_user_id, args.access_token,
-                                     args.image_url, text)
+        if len(urls) == 1:
+            print("Container anlegen …")
+            container = create_container(base, args.ig_user_id, args.access_token,
+                                         urls[0], text)
+        else:
+            children = []
+            for i, url in enumerate(urls, start=1):
+                child = create_child(base, args.ig_user_id, args.access_token, url)
+                print(f"  Bild {i}/{len(urls)}: Container {child}")
+                # Jedes Einzelbild muss fertig verarbeitet sein, bevor das
+                # Karussell darauf verweisen darf.
+                wait_ready(base, child, args.access_token)
+                children.append(child)
+            print("Karussell anlegen …")
+            container = create_carousel(base, args.ig_user_id, args.access_token,
+                                        children, text)
         print(f"  Container {container}")
 
         print("auf Verarbeitung warten …")

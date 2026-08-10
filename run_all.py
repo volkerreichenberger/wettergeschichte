@@ -40,12 +40,12 @@ VARIANTS: list[tuple[str, list[str]]] = [
     ("R base · NYT",            ["Rscript", "plots/R/nyt_base.R"]),
     # Beiträge: quadratisch, ohne Text im Bild, je Beitrag ein Ordner in posts/
     ("Post · 3 Tage",           [sys.executable, "plots/python/drei_tage_matplotlib.py"]),
+    ("Post · NYT Serie",        [sys.executable, "plots/python/nyt_post_matplotlib.py",
+                                 "--zeitraum", "serie"]),
     ("Post · NYT Jahr",         [sys.executable, "plots/python/nyt_post_matplotlib.py",
                                  "--zeitraum", "jahr"]),
-    ("Post · NYT 1. Halbjahr",  [sys.executable, "plots/python/nyt_post_matplotlib.py",
-                                 "--zeitraum", "h1"]),
-    ("Post · NYT 2. Halbjahr",  [sys.executable, "plots/python/nyt_post_matplotlib.py",
-                                 "--zeitraum", "h2"]),
+    ("Post · NYT Quartal",      [sys.executable, "plots/python/nyt_post_matplotlib.py",
+                                 "--zeitraum", "quartal"]),
     ("Post · NYT 3 Monate",     [sys.executable, "plots/python/nyt_post_matplotlib.py",
                                  "--zeitraum", "monate", "--months", "3"]),
     ("Instagram · NYT",         [sys.executable, "plots/python/instagram_card.py"]),
@@ -89,9 +89,11 @@ def main(argv: list[str] | None = None) -> int:
                                    "--stations", *map(str, args.stations)])
 
     print("\nKennzahlen ableiten")
-    ok &= run("climatology", [sys.executable, "climatology.py",
-                              "--year", str(args.year),
-                              "--stations", *map(str, args.stations)])
+    # Auch das Vorjahr: die Quartalsserie reicht bis zu drei Quartale zurück.
+    for year in (args.year - 1, args.year):
+        ok &= run(f"climatology {year}", [sys.executable, "climatology.py",
+                                          "--year", str(year),
+                                          "--stations", *map(str, args.stations)])
 
     variants = VARIANTS
     if args.only:
