@@ -1,0 +1,30 @@
+# Einstellungen für post_daily.sh.
+# Kopieren nach post_daily.conf (steht in .gitignore, enthält Zugangsdaten).
+
+# Welche Station und welche Grafik täglich veröffentlicht werden soll.
+STATION=4931
+# nyt-jahr | nyt-h1 | nyt-h2 | nyt-3monate | drei-tage
+VARIANTE=nyt-h1
+
+# --- Bild öffentlich ablegen ------------------------------------------------
+# Die Instagram-API lädt keine Datei hoch, sie holt sie von einer URL.
+# {src}  = lokaler Pfad zum JPEG
+# {name} = Dateiname, unter dem es öffentlich liegen soll
+
+# Variante A: eigener Webspace per scp
+# WG_UPLOAD_CMD='scp {src} web:/var/www/wetter/{name}'
+# WG_PUBLIC_URL='https://example.org/wetter/{name}'
+
+# Variante B: GitHub Pages (docs/-Ordner eines öffentlichen Repositories)
+# WG_UPLOAD_CMD='cp {src} ~/Projekte/wetter-bilder/docs/{name} && git -C ~/Projekte/wetter-bilder add -A && git -C ~/Projekte/wetter-bilder commit -m "{name}" && git -C ~/Projekte/wetter-bilder push'
+# WG_PUBLIC_URL='https://BENUTZERNAME.github.io/wetter-bilder/{name}'
+
+# Variante C: S3-kompatibler Speicher (Cloudflare R2, Backblaze B2, AWS)
+# WG_UPLOAD_CMD='aws s3 cp {src} s3://wettergeschichte/{name} --acl public-read'
+# WG_PUBLIC_URL='https://wettergeschichte.s3.amazonaws.com/{name}'
+
+# --- Instagram --------------------------------------------------------------
+# Numerische Instagram-User-ID des Profi-Kontos (nicht der @-Name)
+# export IG_USER_ID=17841400000000000
+# Langlebiges Zugriffstoken, 60 Tage gültig
+# export IG_ACCESS_TOKEN=EAAG...

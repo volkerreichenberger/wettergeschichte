@@ -1,0 +1,11 @@
+# Kern – ohne diese läuft nichts
+pandas>=2.0
+numpy>=1.24
+matplotlib>=3.7
+
+# nur für einzelne Grafikvarianten
+plotnine>=0.13        # plots/python/nyt_plotnine.py
+plotly>=5.20          # plots/python/nyt_plotly.py
+kaleido>=0.2          # statischer PNG-Export für plotly
+
+# R-Varianten brauchen: ggplot2, patchwork, lattice, ragg

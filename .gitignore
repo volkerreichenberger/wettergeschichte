@@ -1,0 +1,15 @@
+# Alles unter data/, output/ und posts/ lässt sich mit 'python run_all.py'
+# neu erzeugen.
+data/
+output/
+posts/
+
+__pycache__/
+*.pyc
+.Rhistory
+.RData
+.DS_Store
+log/
+
+# Zugangsdaten und lokale Einstellungen
+post_daily.conf
