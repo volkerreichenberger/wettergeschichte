@@ -21,6 +21,7 @@ VARIANTE="nyt-h1"
 UPLOAD=0     # Bild wirklich hochladen
 PUBLISH=0    # Beitrag wirklich veröffentlichen
 SKIP_FETCH=0
+STAND=""     # Stichtag: Beitrag so bauen, wie er an dem Tag ausgesehen haette
 
 # GitHub Pages baut nach einem Push erst neu; bis dahin liefert die URL 404.
 # Instagram würde in dieser Zeit mit ERROR abbrechen, deshalb wird gewartet.
@@ -39,6 +40,7 @@ while [ $# -gt 0 ]; do
     --upload-only) UPLOAD=1 ;;   # Bildablage testen, ohne zu veröffentlichen
     --skip-fetch)  SKIP_FETCH=1 ;;
     --station)    STATION="$2"; shift ;;
+    --stand)      STAND="$2"; shift ;;
     --variante)   VARIANTE="$2"; shift ;;
     -h|--help)    sed -n '2,15p' "$0"; exit 0 ;;
     *)            echo "unbekannte Option: $1" >&2; exit 2 ;;
@@ -72,7 +74,7 @@ case "$VARIANTE" in
      echo "möglich: serie nyt-jahr nyt-quartal nyt-3monate drei-tage" >&2; exit 2 ;;
 esac
 
-echo "== Wettergeschichte, Variante $VARIANTE, Station $STATION"
+echo "== Wettergeschichte, Variante $VARIANTE, Station $STATION${STAND:+, Stand $STAND}"
 
 # ---------------------------------------------------------------------------
 # 0. Token prüfen und bei Bedarf verlängern
@@ -114,7 +116,9 @@ fi
 # 2. Beitrag bauen
 # ---------------------------------------------------------------------------
 echo "-- Beitrag bauen"
-BUILD_OUT="$("$PYTHON" "${BUILD[@]}" --station "$STATION")"
+BUILD_ARGS=(--station "$STATION")
+[ -n "$STAND" ] && BUILD_ARGS+=(--stand "$STAND")
+BUILD_OUT="$("$PYTHON" "${BUILD[@]}" "${BUILD_ARGS[@]}")"
 echo "$BUILD_OUT"
 
 POST_DIR="$(printf '%s\n' "$BUILD_OUT" | sed -n 's/^POST_DIR=//p' | tail -1)"

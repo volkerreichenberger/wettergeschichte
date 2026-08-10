@@ -58,13 +58,21 @@ def load_hourly(data_dir: Path, station_id: int) -> pd.DataFrame:
     return df.dropna(subset=["temp_c"])
 
 
-def build_window(df: pd.DataFrame, days: int, years: int):
+def build_window(df: pd.DataFrame, days: int, years: int, stand: str | None = None):
     """Aktuelles Fenster plus die deckungsgleichen Fenster der Vorjahre.
 
     Zugeordnet wird über (Monat, Tag, Stunde). Fällt ein 29. Februar ins
     Fenster, fehlt er in Nicht-Schaltjahren schlicht – die Kurve hat dort
     eine Lücke, was ehrlicher ist als ein verschobener Wert.
+
+    ``stand`` beschneidet die Reihe auf einen Stichtag; damit lässt sich das
+    Bild so bauen, wie es an einem früheren Tag ausgesehen hätte.
     """
+    if stand:
+        cut = pd.Timestamp(stand) + pd.Timedelta(hours=23)
+        df = df[df["timestamp"] <= cut]
+        if df.empty:
+            raise SystemExit(f"Keine Stundenwerte bis zum Stichtag {stand}.")
     last = df["timestamp"].max()
     start = (last.normalize() - pd.Timedelta(days=days - 1))
     current = df[(df["timestamp"] >= start) & (df["timestamp"] <= last)].copy()
@@ -154,7 +162,8 @@ def caption(current, past, station_name: str, args, last) -> str:
         )
 
     return (
-        f"Die letzten {args.days} Tage in {station_name}\n\n"
+        f"Die letzten {args.days} Tage in "
+        f"{wg.display_name(args.station, station_name)}\n\n"
         f"Stündliche Lufttemperatur in 2 m Höhe. Die kräftige blaue Linie ist "
         f"{last.year}, dahinter liegen dieselben Kalendertage der {args.years} "
         f"Vorjahre in Grau – je weiter zurück, desto heller."
@@ -163,9 +172,7 @@ def caption(current, past, station_name: str, args, last) -> str:
         f"\n· Tiefstwert {wg.de_num(coldest['temp_c'])} °C am {stamp(coldest)}"
         f"\n· Mittel {wg.de_num(mean)} °C über {len(current)} Stunden"
         f"{ranking}"
-        f"\n\nDaten: Deutscher Wetterdienst, Climate Data Center "
-        f"(opendata.dwd.de), Station {args.station}. "
-        f"Stand {last:%d.%m.%Y}, {last:%H} Uhr."
+        f"\n\n{wg.quelle(args.station, station_name, f'{last:%d.%m.%Y}, {last:%H} Uhr')}"
         f"\n\n{wg.HASHTAGS}"
     )
 
@@ -176,6 +183,8 @@ def main(argv=None) -> int:
     ap.add_argument("--days", type=int, default=3, help="Anzahl der gezeigten Tage")
     ap.add_argument("--years", type=int, default=5, help="Anzahl der Vorjahre dahinter")
     ap.add_argument("--data-dir", type=Path, default=wg.ROOT / "data")
+    ap.add_argument("--stand", metavar="JJJJ-MM-TT",
+                    help="Bild so bauen, wie es an diesem Tag ausgesehen hätte")
     ap.add_argument("--posts", type=Path, default=wg.ROOT / "posts",
                     help="Verzeichnis, unter dem je Beitrag ein Ordner angelegt wird")
     ap.add_argument("--jpeg-quality", type=int, default=92)
@@ -191,7 +200,7 @@ def main(argv=None) -> int:
     )
 
     df = load_hourly(args.data_dir, args.station)
-    current, past, start, last = build_window(df, args.days, args.years)
+    current, past, start, last = build_window(df, args.days, args.years, args.stand)
     station_name = wg.station_name(args.station, args.data_dir)
 
     # Layout in Zoll bei 200 dpi festlegen, gespeichert wird mit --dpi:

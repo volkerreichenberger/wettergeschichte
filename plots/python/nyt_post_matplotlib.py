@@ -25,9 +25,11 @@ Das Bild trägt keinen Titel und keine Fußzeile; alles Textliche steht in der
 from __future__ import annotations
 
 import sys
+from datetime import date
 from pathlib import Path
 
 import matplotlib
+import pandas as pd
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -63,6 +65,22 @@ def shift_quartal(year: int, q: int, zurueck: int) -> tuple[int, int]:
     """``zurueck`` Quartale zurückgehen – das läuft über Jahresgrenzen hinweg."""
     total = year * 4 + q - zurueck
     return total // 4, total % 4
+
+
+def apply_stand(year_df, summary: dict, stand: str | None):
+    """Beschneidet die Tageswerte auf einen Stichtag.
+
+    Damit lässt sich ein Beitrag so bauen, wie er an einem früheren Tag
+    ausgesehen hätte – nützlich zum Nachstellen und Prüfen.
+    """
+    if not stand:
+        return year_df, summary
+    cut = pd.Timestamp(stand)
+    if cut < year_df["date"].min():
+        raise SystemExit(f"Stichtag {stand} liegt vor dem ersten Messtag des Jahres.")
+    summary = dict(summary)
+    summary["last_date"] = stand
+    return year_df[year_df["date"] <= cut], summary
 
 
 def load_year(station: int, year: int, derived: Path):
@@ -181,7 +199,8 @@ def render_legende(summary, path, args) -> None:
          f"höchster und tiefster Wert dieses\nKalendertags – {jahre} Jahre seit "
          f"{summary['record_from']}"),
         (Patch(facecolor=wg.NORMAL_BAND, edgecolor=wg.GRID, linewidth=0.8),
-         f"Normalbereich der Periode\n{summary['reference_from']}–{summary['reference_to']}"),
+         f"so sieht ein durchschnittlicher Tag\ndieser Jahreszeit aus "
+         f"({summary['reference_from']}–{summary['reference_to']})"),
         (Line2D([], [], color=wg.BAR_NEUTRAL, lw=9),
          f"ein Tag {summary['year']}, von der Tiefst-\nbis zur Höchsttemperatur"),
         (Line2D([], [], color=wg.WARM, lw=9), "über dem Normalbereich"),
@@ -223,6 +242,11 @@ def common_ylim(panels) -> tuple[float, float]:
 # Begleittext
 # --------------------------------------------------------------------------- #
 
+def deutsches_datum(iso: str) -> str:
+    """2026-08-09 -> 09.08.2026 – im Begleittext liest sich das besser."""
+    return date.fromisoformat(str(iso)).strftime("%d.%m.%Y")
+
+
 def erklaerung(summary) -> str:
     """Die Bildlegende in Worten – die Quartalsbilder tragen keine mehr.
 
@@ -235,9 +259,11 @@ def erklaerung(summary) -> str:
         f"· Die hellbraune Fläche ist die Spanne zwischen dem tiefsten und dem "
         f"höchsten Wert, der an diesem Kalendertag je gemessen wurde – "
         f"{jahre} Jahre seit {summary['record_from']}.\n"
-        f"· Die dunkelbraune Fläche darin ist der Normalbereich: das mittlere "
-        f"Tagesminimum und -maximum der Periode {summary['reference_from']}–"
-        f"{summary['reference_to']}.\n"
+        f"· Die dunkelbraune Fläche darin zeigt, wie ein durchschnittlicher Tag "
+        f"dieser Jahreszeit aussieht: das mittlere Tagesminimum und -maximum der "
+        f"Periode {summary['reference_from']}–{summary['reference_to']}, über zwei "
+        f"Wochen geglättet. Es ist kein Streubereich – ungefähr die Hälfte aller "
+        f"Tage ragt oben oder unten heraus.\n"
         "· Jeder senkrechte Balken ist ein Tag, von der Tiefst- bis zur "
         "Höchsttemperatur. Grau, solange er im Normalbereich bleibt.\n"
         "· Rot ist der Teil eines Tages oberhalb des Normalbereichs, blau der "
@@ -275,11 +301,12 @@ def caption_single(clim, year_df, summary, window, ueberschrift: str) -> str:
     sub = year_df[(year_df["doy"] >= lo) & (year_df["doy"] <= hi)].dropna(subset=["temp_mean_c"])
     spanne = f"{wg.de_date(sub['date'].min())} bis {wg.de_date(sub['date'].max())} {sub['date'].max().year}"
     return (
-        f"{summary['station_name']}: {ueberschrift}\n\n"
+        f"{wg.display_name(summary['station_id'], summary['station_name'])}: "
+        f"{ueberschrift}\n\n"
         + erklaerung(summary)
         + f"\n\n{spanne}\n{text}"
-        + f"\n\nDaten: Deutscher Wetterdienst, Climate Data Center (opendata.dwd.de), "
-          f"Station {summary['station_id']}. Stand {summary['last_date']}."
+        + "\n\n" + wg.quelle(summary["station_id"], summary["station_name"],
+                                deutsches_datum(summary["last_date"]))
         + f"\n\n{wg.HASHTAGS}"
     )
 
@@ -298,16 +325,16 @@ def caption_serie(panels, labels, summary) -> str:
     haupt, *_ = panels
     text, _ = kennzahlen(*haupt[:3], haupt[3])
     return (
-        f"{summary['station_name']}: das Jahr {summary['year']} und die vier "
-        f"jüngsten Quartale\n\n"
+        f"{wg.display_name(summary['station_id'], summary['station_name'])}: "
+        f"das Jahr {summary['year']} und die vier jüngsten Quartale\n\n"
         + erklaerung(summary)
         + "\n\nAlle Bilder teilen sich dieselbe Temperaturskala und sind damit "
           "unmittelbar vergleichbar. Zum Blättern nach rechts wischen – das "
           "laufende Quartal steht am Ende, dahinter die Legende."
         + "\n\nIm Bilderlauf:\n" + "\n".join(zeilen)
         + f"\n\n{summary['year']} bisher:\n{text}"
-        + f"\n\nDaten: Deutscher Wetterdienst, Climate Data Center (opendata.dwd.de), "
-          f"Station {summary['station_id']}. Stand {summary['last_date']}."
+        + "\n\n" + wg.quelle(summary["station_id"], summary["station_name"],
+                                deutsches_datum(summary["last_date"]))
         + f"\n\n{wg.HASHTAGS}"
     )
 
@@ -320,6 +347,7 @@ def caption_serie(panels, labels, summary) -> str:
 def build_serie(args) -> Path:
     """Ganzjahresbild plus die vier jüngsten Quartale, aktuelles Quartal zuletzt."""
     clim, year_df, _recent, summary = load_year(args.station, args.year, args.derived)
+    year_df, summary = apply_stand(year_df, summary, args.stand)
     last = year_df["date"].max()
     q_now = quartal_of(last.month)
 
@@ -368,6 +396,7 @@ def build_single(args) -> Path:
     style()
     if args.zeitraum == "quartal":
         clim, year_df, _r, summary = load_year(args.station, args.year, args.derived)
+        year_df, summary = apply_stand(year_df, summary, args.stand)
         year, q = shift_quartal(int(year_df["date"].max().year),
                                 quartal_of(year_df["date"].max().month), args.zurueck)
         if year != args.year:
@@ -377,11 +406,13 @@ def build_single(args) -> Path:
         suffix = f"q{q + 1}_{year}"
     elif args.zeitraum == "monate":
         clim, year_df, _r, summary = load_year(args.station, args.year, args.derived)
+        year_df, summary = apply_stand(year_df, summary, args.stand)
         window = window_from_months(year_df, args.months)
         ueberschrift = f"die letzten {args.months} Monate"
         suffix = f"{args.months}monate"
     else:
         clim, year_df, _r, summary = load_year(args.station, args.year, args.derived)
+        year_df, summary = apply_stand(year_df, summary, args.stand)
         window = (1, wg.MONTH_END)
         ueberschrift = f"das Jahr {summary['year']}"
         suffix = "jahr"
@@ -407,6 +438,8 @@ def main(argv=None) -> int:
                     help="nur bei --zeitraum quartal: wie viele Quartale zurück (0 = laufendes)")
     ap.add_argument("--months", type=int, default=3,
                     help="nur bei --zeitraum monate: Anzahl der Monate")
+    ap.add_argument("--stand", metavar="JJJJ-MM-TT",
+                    help="Beitrag so bauen, wie er an diesem Tag ausgesehen hätte")
     ap.add_argument("--posts", type=Path, default=wg.POSTS)
     ap.add_argument("--jpeg-quality", type=int, default=92)
     args = ap.parse_args(argv)

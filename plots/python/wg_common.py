@@ -55,6 +55,24 @@ SOURCE_NOTE = "Datenquelle: Deutscher Wetterdienst, Climate Data Center (opendat
 #: Schlusszeile aller Begleittexte – bewusst nur drei Stück.
 HASHTAGS = "#wetter #wettergeschichte #stuttgart"
 
+#: Wie die Station im Begleittext heißt. Der amtliche Name sagt Ortsfremden
+#: wenig; er steht dafür weiter unten in der Quellenangabe.
+DISPLAY_NAMES = {4931: "Stuttgart (Süd)"}
+
+
+def display_name(station_id: int, amtlich: str | None = None) -> str:
+    """Anzeigename für Überschriften; sonst der amtliche Name."""
+    return DISPLAY_NAMES.get(int(station_id), amtlich or f"Station {station_id}")
+
+
+def quelle(station_id: int, amtlich: str, stand: str) -> str:
+    """Quellenangabe – hier steht, welche Station wirklich gemeint ist."""
+    return (
+        f"Gemessen wird an der Station {station_id} {amtlich} des Deutschen "
+        f"Wetterdienstes.\nDaten: DWD Climate Data Center (opendata.dwd.de), "
+        f"Stand {stand}."
+    )
+
 # --------------------------------------------------------------------------- #
 # Schrift
 # --------------------------------------------------------------------------- #
