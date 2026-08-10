@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Die letzten drei Tage im Stundenverlauf, dahinter dieselben Tage der Vorjahre.
 
-Die aktuelle Kurve steht in Pantone Classic Blue (RGB 50, 81, 133), die fünf
+Die aktuelle Kurve steht in Blau (RGB 35, 102, 202), die fünf
 Vorjahre dahinter in Grau, das mit dem Alter heller wird (Grauwerte 80, 120,
 160, 200, 240).
 
@@ -224,7 +224,7 @@ def main(argv=None) -> int:
     # dort ablesbar, wo sie durch das Bündel der Vorjahre läuft.
     ax.plot(current["x"], current["temp_c"], color=wg.BACKGROUND, lw=HALO_LW,
             solid_capstyle="round", zorder=9)
-    ax.plot(current["x"], current["temp_c"], color=wg.CLASSIC_BLUE, lw=CURRENT_LW,
+    ax.plot(current["x"], current["temp_c"], color=wg.CURRENT_BLUE, lw=CURRENT_LW,
             solid_capstyle="round", zorder=10)
 
     day_axis(ax, current)
@@ -239,7 +239,7 @@ def main(argv=None) -> int:
 
     # Jahre ohne Messwerte gar nicht erst in die Legende aufnehmen – sonst
     # sucht man im Bild nach einer Linie, die es nicht gibt.
-    handles = [Line2D([], [], color=wg.CLASSIC_BLUE, lw=CURRENT_LW, label=str(last.year))]
+    handles = [Line2D([], [], color=wg.CURRENT_BLUE, lw=CURRENT_LW, label=str(last.year))]
     handles += [
         Line2D([], [], color=grey(i), lw=2, label=str(int(last.year) - 1 - i))
         for i in range(args.years)

@@ -44,8 +44,8 @@ MONTH_NAMES_LONG = [
 WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
 WEEKDAYS_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
-#: Pantone Classic Blue (RGB 50, 81, 133) – Farbe der aktuellen Kurve.
-CLASSIC_BLUE = "#325185"
+#: Farbe der aktuellen Kurve im Drei-Tages-Bild (RGB 35, 102, 202).
+CURRENT_BLUE = "#2366ca"
 #: Erster Tag jedes Monats im 365-Tage-Schema (siehe climatology.doy_no_leap).
 MONTH_STARTS = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
 MONTH_END = 366

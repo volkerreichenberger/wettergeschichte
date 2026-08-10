@@ -204,8 +204,8 @@ Die ältere Fassung `instagram_card.py` schreibt Titel und Kennzahlen ins Bild
 
 ### Die letzten drei Tage
 
-Quadratisch (1080 × 1080), die aktuelle Kurve in Pantone Classic Blue
-(RGB 50 · 81 · 133), dahinter dieselben Kalendertage der fünf Vorjahre in
+Quadratisch (1080 × 1080), die aktuelle Kurve in Blau
+(RGB 35 · 102 · 202), dahinter dieselben Kalendertage der fünf Vorjahre in
 Grau, das mit dem Alter heller wird (Grauwerte 160, 180, 200, 220, 240).
 
 ```bash
