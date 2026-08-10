@@ -2,9 +2,8 @@
 """Die letzten drei Tage im Stundenverlauf, dahinter dieselben Tage der Vorjahre.
 
 Die aktuelle Kurve steht in Pantone Classic Blue (RGB 50, 81, 133), die fünf
-Vorjahre dahinter in Grau, das mit dem Alter heller wird (RGB 160, 180, 200,
-220, 240 – jeweils als Grauwert). Zusätzlich wechselt die Strichart: das
-letzte Jahr durchgezogen, das vorletzte gestrichelt, das davor gepunktet.
+Vorjahre dahinter in Grau, das mit dem Alter heller wird (Grauwerte 80, 120,
+160, 200, 240).
 
 Grundlage sind Stundenwerte (``fetch_hourly.py``), nicht die Tageswerte: drei
 Tage wären sonst drei Punkte. Die Vorjahre werden über Monat, Tag und Stunde
@@ -30,19 +29,15 @@ sys.path.insert(0, str(Path(__file__).parent))
 import wg_common as wg
 
 #: Grauwert des jüngsten Vorjahres; jedes ältere Jahr wird um GREY_STEP heller.
-GREY_START = 160
-GREY_STEP = 20
+#: 80 – 120 – 160 – 200 – 240 spreizt die fünf Jahre über den ganzen Bereich
+#: zwischen fast schwarz und fast weiß.
+GREY_START = 80
+GREY_STEP = 40
 
-#: Strichart je Vorjahr: durchgezogen, gestrichelt, gepunktet, dann weiter.
-#: Zusammen mit dem Grauton bleiben die Jahre auch dort unterscheidbar, wo die
-#: Kurven dicht beieinanderliegen – Helligkeit allein trägt nicht weit genug.
-PAST_STYLES = [
-    "solid",
-    (0, (5, 2)),        # gestrichelt
-    (0, (1, 2)),        # gepunktet
-    (0, (6, 2, 1, 2)),  # Strich-Punkt
-    (0, (2, 2)),        # kurz gestrichelt
-]
+#: Strichstärke der aktuellen Kurve und ihres weißen Sockels darunter. Der
+#: Sockel trennt sie von den grauen Vorjahren, auch wo sie sich kreuzen.
+CURRENT_LW = 2.8
+HALO_LW = CURRENT_LW + 3.0
 
 SIZE_PX = 1080
 
@@ -51,11 +46,6 @@ def grey(index: int) -> str:
     """Grauton für das index-te Vorjahr (0 = das jüngste)."""
     value = min(255, GREY_START + GREY_STEP * index)
     return f"#{value:02x}{value:02x}{value:02x}"
-
-
-def style_for(index: int):
-    """Strichart für das index-te Vorjahr; jenseits der Liste wieder durchgezogen."""
-    return PAST_STYLES[index] if index < len(PAST_STYLES) else "solid"
 
 
 def load_hourly(data_dir: Path, station_id: int) -> pd.DataFrame:
@@ -165,8 +155,7 @@ def caption(current, past, station_name: str, args, last) -> str:
         f"Die letzten {args.days} Tage in {station_name}\n\n"
         f"Stündliche Lufttemperatur in 2 m Höhe. Die kräftige blaue Linie ist "
         f"{last.year}, dahinter liegen dieselben Kalendertage der {args.years} "
-        f"Vorjahre: das letzte durchgezogen, das vorletzte gestrichelt, das "
-        f"davor gepunktet – und je weiter zurück, desto heller."
+        f"Vorjahre in Grau – je weiter zurück, desto heller."
         f"\n\n{zeitraum}"
         f"\n· Höchstwert {wg.de_num(warmest['temp_c'])} °C am {stamp(warmest)}"
         f"\n· Tiefstwert {wg.de_num(coldest['temp_c'])} °C am {stamp(coldest)}"
@@ -217,12 +206,14 @@ def main(argv=None) -> int:
     for offset in range(args.years, 0, -1):
         year = int(last.year) - offset
         sub = past[year]
-        ax.plot(sub["x"], sub["temp_c"], color=grey(offset - 1),
-                linestyle=style_for(offset - 1), lw=1.5,
-                solid_capstyle="round", dash_capstyle="round",
-                zorder=2 + (args.years - offset))
+        ax.plot(sub["x"], sub["temp_c"], color=grey(offset - 1), lw=1.5,
+                solid_capstyle="round", zorder=2 + (args.years - offset))
 
-    ax.plot(current["x"], current["temp_c"], color=wg.CLASSIC_BLUE, lw=2.8,
+    # Erst ein weißer Sockel, dann die blaue Linie darüber: so bleibt sie auch
+    # dort ablesbar, wo sie durch das Bündel der Vorjahre läuft.
+    ax.plot(current["x"], current["temp_c"], color=wg.BACKGROUND, lw=HALO_LW,
+            solid_capstyle="round", zorder=9)
+    ax.plot(current["x"], current["temp_c"], color=wg.CLASSIC_BLUE, lw=CURRENT_LW,
             solid_capstyle="round", zorder=10)
 
     day_axis(ax, current)
@@ -237,10 +228,9 @@ def main(argv=None) -> int:
 
     # Jahre ohne Messwerte gar nicht erst in die Legende aufnehmen – sonst
     # sucht man im Bild nach einer Linie, die es nicht gibt.
-    handles = [Line2D([], [], color=wg.CLASSIC_BLUE, lw=3, label=str(last.year))]
+    handles = [Line2D([], [], color=wg.CLASSIC_BLUE, lw=CURRENT_LW, label=str(last.year))]
     handles += [
-        Line2D([], [], color=grey(i), lw=2, linestyle=style_for(i),
-               label=str(int(last.year) - 1 - i))
+        Line2D([], [], color=grey(i), lw=2, label=str(int(last.year) - 1 - i))
         for i in range(args.years)
         if past[int(last.year) - 1 - i]["temp_c"].notna().any()
     ]
