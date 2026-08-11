@@ -346,7 +346,12 @@ def print_status(data_dir: Path) -> None:
         if not base.exists():
             print("  (keine Daten – bitte 'python fetch_dwd.py' laufen lassen)")
             continue
+        # Nur die Tageswerte: fetch_hourly.py legt seine CSV im selben
+        # Verzeichnis ab, die hat aber 'timestamp' statt 'date'.
+        bekannt = set(DATASETS) | {"daily"}
         for path in sorted(base.glob("*.csv")):
+            if path.stem not in bekannt:
+                continue
             df = pd.read_csv(path, usecols=["date"], parse_dates=["date"])
             print(
                 f"  {path.stem:<24} {len(df):>7} Tage  "
