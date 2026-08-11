@@ -70,17 +70,24 @@ warte_auf_bild() {
   return 1
 }
 
-case "$VARIANTE" in
-  serie)       BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum serie) ;;
-  nyt-jahr)    BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum jahr) ;;
-  nyt-quartal) BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum quartal) ;;
-  nyt-3monate) BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum monate --months 3) ;;
-  drei-tage)   BUILD=(plots/python/drei_tage_matplotlib.py) ;;
-  *) echo "unbekannte Variante: $VARIANTE" >&2
-     echo "möglich: serie nyt-jahr nyt-quartal nyt-3monate drei-tage" >&2; exit 2 ;;
-esac
+# VARIANTE darf mehrere Werte enthalten, durch Leerzeichen getrennt – dann
+# entsteht je Variante ein eigener Beitrag. Erst alle prüfen, damit ein Tippfehler
+# nicht auffällt, nachdem der erste Beitrag schon veröffentlicht ist.
+setze_build() {
+  case "$1" in
+    serie)       BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum serie) ;;
+    nyt-jahr)    BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum jahr) ;;
+    nyt-quartal) BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum quartal) ;;
+    nyt-3monate) BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum monate --months 3) ;;
+    drei-tage)   BUILD=(plots/python/drei_tage_matplotlib.py) ;;
+    *) echo "unbekannte Variante: $1" >&2
+       echo "möglich: serie nyt-jahr nyt-quartal nyt-3monate drei-tage" >&2; return 2 ;;
+  esac
+}
+for VAR in $VARIANTE; do setze_build "$VAR" || exit 2; done
 
-echo "== Wettergeschichte, Variante $VARIANTE, Station $STATION${STAND:+, Stand $STAND}"
+echo "== Wettergeschichte, Station $STATION${STAND:+, Stand $STAND}"
+echo "   Varianten: $VARIANTE"
 
 # ---------------------------------------------------------------------------
 # 0. Token prüfen und bei Bedarf verlängern
@@ -118,10 +125,14 @@ else
   echo "-- Daten übersprungen (--skip-fetch)"
 fi
 
+FEHLER=0
+for VAR in $VARIANTE; do
+setze_build "$VAR"
+
 # ---------------------------------------------------------------------------
 # 2. Beitrag bauen
 # ---------------------------------------------------------------------------
-echo "-- Beitrag bauen"
+printf '\n-- Beitrag bauen: %s\n' "$VAR"
 BUILD_ARGS=(--station "$STATION")
 [ -n "$STAND" ] && BUILD_ARGS+=(--stand "$STAND")
 BUILD_OUT="$("$PYTHON" "${BUILD[@]}" "${BUILD_ARGS[@]}")"
@@ -129,12 +140,12 @@ echo "$BUILD_OUT"
 
 POST_DIR="$(printf '%s\n' "$BUILD_OUT" | sed -n 's/^POST_DIR=//p' | tail -1)"
 if [ -z "$POST_DIR" ] || [ ! -d "$POST_DIR" ]; then
-  echo "Beitragsordner nicht gefunden – Abbruch." >&2
-  exit 1
+  echo "   Beitragsordner nicht gefunden – $VAR übersprungen." >&2
+  FEHLER=1; continue
 fi
 
 CAPTION="$POST_DIR/text.txt"
-[ -f "$CAPTION" ] || { echo "text.txt fehlt in $POST_DIR" >&2; exit 1; }
+[ -f "$CAPTION" ] || { echo "   text.txt fehlt in $POST_DIR" >&2; FEHLER=1; continue; }
 
 # Einzelbild heißt bild.jpg, eine Serie bild_1.jpg … bild_n.jpg. Die
 # Sortierung bestimmt die Reihenfolge im Karussell.
@@ -145,7 +156,7 @@ else
   while IFS= read -r f; do IMAGES+=("$f"); done < <(ls -1 "$POST_DIR"/bild_*.jpg 2>/dev/null | sort -V)
 fi
 # Unter 'set -u' bricht bash 3.2 an einem leeren Array ab, deshalb ${...[*]:-}.
-[ -n "${IMAGES[*]:-}" ] || { echo "kein Bild in $POST_DIR" >&2; exit 1; }
+[ -n "${IMAGES[*]:-}" ] || { echo "   kein Bild in $POST_DIR" >&2; FEHLER=1; continue; }
 echo "   ${#IMAGES[@]} Bild(er)"
 
 # ---------------------------------------------------------------------------
@@ -178,7 +189,10 @@ if [ -n "${WG_UPLOAD_CMD:-}" ] && [ -n "${WG_PUBLIC_URL:-}" ]; then
   if [ "$UPLOAD" -eq 1 ] && ! warte_auf_bild "$LETZTE" "$LETZTE_DATEI"; then
     # Ohne abrufbares Bild scheitert die Instagram-API ohnehin – dann lieber
     # hier abbrechen, als einen kaputten Container anzulegen.
-    [ "$PUBLISH" -eq 1 ] && { echo "   Abbruch vor dem Veröffentlichen." >&2; exit 1; }
+    if [ "$PUBLISH" -eq 1 ]; then
+      echo "   $VAR nicht veröffentlicht – Bild nicht abrufbar." >&2
+      FEHLER=1; continue
+    fi
   fi
 else
   for IMAGE in "${IMAGES[@]}"; do
@@ -205,3 +219,6 @@ for URL in "${URLS[@]}"; do ARGS+=(--image-url "$URL"); done
 "$PYTHON" "${ARGS[@]}"
 
 echo "== fertig: $POST_DIR"
+done
+
+exit "$FEHLER"

@@ -153,7 +153,19 @@ Ohne `post_daily.conf` läuft nur der Trockenlauf – so lässt sich der ganze W
 prüfen, bevor Zugangsdaten im Spiel sind. Der Trockenlauf zeigt am Ende den
 fertigen Bildtext und die URL, unter der das Bild liegen müsste.
 
-Als `--variante` stehen zur Wahl:
+`VARIANTE` in `post_daily.conf` darf **mehrere** Werte enthalten, durch
+Leerzeichen getrennt – dann entsteht je Variante ein eigener Beitrag:
+
+```bash
+VARIANTE="serie drei-tage"
+```
+
+Auf der Kommandozeile geht dasselbe: `--variante "serie drei-tage"`. Daten und
+Token werden dabei nur einmal geholt, gebaut und veröffentlicht wird je
+Variante. Scheitert eine, laufen die übrigen trotzdem durch; das Skript endet
+dann mit Rückgabewert 1.
+
+Zur Wahl stehen:
 
 | Variante | Beitrag |
 |---|---|

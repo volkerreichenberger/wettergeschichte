@@ -3,8 +3,9 @@
 
 # Welche Station und welche Grafik täglich veröffentlicht werden soll.
 STATION=4931
-# nyt-jahr | nyt-h1 | nyt-h2 | nyt-3monate | drei-tage
-VARIANTE=nyt-h1
+# Mehrere durch Leerzeichen getrennt – dann entsteht je Variante ein Beitrag.
+# serie | nyt-jahr | nyt-quartal | nyt-3monate | drei-tage
+VARIANTE="serie drei-tage"
 
 # --- Bild öffentlich ablegen ------------------------------------------------
 # Die Instagram-API lädt keine Datei hoch, sie holt sie von einer URL.
