@@ -189,6 +189,8 @@ Zwei Besonderheiten:
   nicht von 4931 – dort fehlt er von Juni 2022 bis August 2023 vollständig.
   `post_daily.py` holt deshalb die Daten beider Stationen und gibt jeder
   Variante die passende mit (`BEWOELKUNG_STATION`).
+* **Nachträglich.** `--monat 2026-01` baut einen beliebigen Monat, `--force`
+  auch dann, wenn es den Ordner schon gibt.
 * **Toleranz.** Bis zu zwei fehlende Tage im Monat sind erlaubt; sie bleiben im
   Bild leer und werden im Begleittext benannt. Ohne diese Toleranz würde ein
   einzelner Messausfall den Monatsbeitrag für immer blockieren.

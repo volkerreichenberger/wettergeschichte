@@ -5,6 +5,7 @@
     ./post_daily.py --upload-only        Bilder ablegen, aber nicht veröffentlichen
     ./post_daily.py --publish            wirklich veröffentlichen
     ./post_daily.py --variante drei-tage --stand 2026-08-05
+    ./post_daily.py --variante bewoelkung --monat 2026-01 --publish
 
 Einstellungen kommen aus ``post_daily.conf`` (Vorlage: ``post_daily.conf.example``).
 Ohne diese Datei läuft nur der Trockenlauf – Absicht, so lässt sich der ganze Weg
@@ -226,8 +227,13 @@ def beitrag(variante: str, args, conf: dict) -> bool | None:
     print(f"\n-- Beitrag bauen: {variante} (Station {station})")
 
     befehl = [sys.executable, *VARIANTEN[variante], "--station", station]
-    # Die Monatsgrafik entscheidet selbst über ihren Monat.
-    if args.stand and variante != "bewoelkung":
+    if variante == "bewoelkung":
+        # Die Monatsgrafik kennt keinen Stichtag, sondern einen Monat.
+        if args.monat:
+            befehl += ["--monat", args.monat]
+        if args.force:
+            befehl += ["--force"]
+    elif args.stand:
         befehl += ["--stand", args.stand]
     rc, ausgabe = lauf(befehl)
     if rc == NICHTS_ZU_TUN:
@@ -325,6 +331,10 @@ def main(argv=None) -> int:
                     help="eine oder mehrere, durch Leerzeichen getrennt")
     ap.add_argument("--stand", metavar="JJJJ-MM-TT",
                     help="Beitrag so bauen, wie er an diesem Tag ausgesehen hätte")
+    ap.add_argument("--monat", metavar="JJJJ-MM",
+                    help="nur bei bewoelkung: welcher Monat statt des Vormonats")
+    ap.add_argument("--force", action="store_true",
+                    help="nur bei bewoelkung: auch bauen, wenn der Ordner schon da ist")
     ap.add_argument("--publish", action="store_true",
                     help="wirklich veröffentlichen")
     ap.add_argument("--upload-only", dest="upload_only", action="store_true",

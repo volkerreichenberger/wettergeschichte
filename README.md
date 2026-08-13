@@ -63,7 +63,14 @@ Zwei Beiträge, festgelegt über `VARIANTE` in `post_daily.conf`:
 
 `bewoelkung` läuft täglich mit, tut aber fast immer nichts: Der Beitrag entsteht
 erst, wenn der Vormonat vollständig vorliegt, und wird übersprungen, sobald es
-ihn gibt. Er kommt außerdem von **Station 4928 Schnarrenberg** — an 4931 fehlt
+ihn gibt. Einen anderen Monat nachträglich bauen und posten:
+
+```bash
+./post_daily.py --variante bewoelkung --monat 2026-01            # Trockenlauf
+./post_daily.py --variante bewoelkung --monat 2026-01 --publish
+```
+
+`--force` baut auch dann, wenn den Ordner schon gibt. Er kommt außerdem von **Station 4928 Schnarrenberg** — an 4931 fehlt
 der Bedeckungsgrad von Juni 2022 bis August 2023. `post_daily.py` holt deshalb
 die Daten beider Stationen.
 
@@ -98,6 +105,43 @@ Automatisch täglich:
 ```cron
 15 9 * * *  cd ~/Programming/wettergeschichte && ./post_daily.py --publish >> log/post.log 2>&1
 ```
+
+---
+
+## Was nie ins Repository darf
+
+| | |
+|---|---|
+| `post_daily.conf` | Zugriffstoken, App-Geheimcode, Konto-ID |
+| `post_daily.conf.*` | Sicherungskopien davon — dieselben Geheimnisse |
+| Zugriffstoken im Klartext | `IGAA…`, `EAA…`, auch in Dokumentation oder Commit-Nachrichten |
+| Instagram-App-Geheimcode | steht im Meta-Dashboard, gehört nur in die lokale Konfiguration |
+
+Alles davon deckt `.gitignore` ab. Verlassen sollte man sich darauf nicht: Ein
+`git add -A` nach einer längeren Sitzung nimmt leicht eine Datei mit, an die
+niemand gedacht hat — genau so wäre einmal eine Sicherungskopie der
+Konfiguration mitgegangen.
+
+Deshalb liegt unter `hooks/pre-commit` eine zusätzliche Sperre. Sie prüft vor
+jedem Commit, was im Index liegt, und blockiert verbotene Dateinamen ebenso wie
+Inhalte, die die Länge echter Geheimnisse haben. Platzhalter wie `IGAA...` oder
+`GEHEIM` lösen bewusst nicht aus.
+
+**Einmalig je Arbeitskopie aktivieren** — `.git/hooks` wird nicht versioniert:
+
+```bash
+git config core.hooksPath hooks
+git config core.hooksPath          # muss "hooks" ausgeben
+```
+
+Schlägt der Haken an, ist das ein Fund und kein Werkzeugfehler: die Datei
+gehört mit `git reset <datei>` aus dem Index, nicht der Haken mit
+`--no-verify` übergangen.
+
+Und wenn doch einmal ein Token in die Historie gerät: Es ist damit verbrannt.
+Dann im Meta-Dashboard ein neues erzeugen und das alte verfallen lassen — die
+Historie umzuschreiben hilft nicht, weil das Token in der Zwischenzeit
+öffentlich war.
 
 ---
 

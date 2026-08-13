@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""Verhindert, dass Zugangsdaten ins Repository geraten.
+
+Der Haken prüft vor jedem Commit, was im Index liegt – nicht das
+Arbeitsverzeichnis. Er blockiert zwei Dinge:
+
+* Dateien, die nie ins Repository gehören (Konfiguration samt Sicherungskopien)
+* Inhalte, die wie ein Zugriffstoken oder ein App-Geheimcode aussehen
+
+Aktivieren – einmalig je Arbeitskopie, weil .git/hooks nicht versioniert wird:
+
+    git config core.hooksPath hooks
+
+Prüfen, ob er aktiv ist:
+
+    git config core.hooksPath        # muss "hooks" ausgeben
+
+Im Notfall übergehen (und danach aufräumen):
+
+    git commit --no-verify
+"""
+
+from __future__ import annotations
+
+import re
+import subprocess
+import sys
+
+#: Dateien, die nie eingecheckt werden dürfen – als Glob gegen den Pfad.
+VERBOTENE_DATEIEN = [
+    "post_daily.conf",
+    "post_daily.conf.*",
+    "*.pem",
+    "*.key",
+    ".env",
+    ".env.*",
+]
+
+#: Muster für Inhalte. Platzhalter wie "IGAA..." oder "GEHEIM" lösen bewusst
+#: nicht aus – nur Zeichenketten, die die Länge echter Geheimnisse haben.
+VERBOTENE_INHALTE = [
+    (re.compile(r"\bIGA[A-Z][A-Za-z0-9_-]{40,}"), "Instagram-Zugriffstoken"),
+    (re.compile(r"\bEAA[A-Za-z0-9]{40,}"), "Facebook-Zugriffstoken"),
+    (re.compile(r"IG_APP_SECRET\s*=\s*[0-9a-f]{16,}"), "Instagram-App-Geheimcode"),
+    (re.compile(r"IG_ACCESS_TOKEN\s*=\s*\S{40,}"), "Zugriffstoken in einer Zuweisung"),
+]
+
+
+def staged_dateien() -> list[str]:
+    aus = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+                         capture_output=True, text=True, check=True)
+    return [z for z in aus.stdout.splitlines() if z.strip()]
+
+
+def staged_inhalt() -> str:
+    aus = subprocess.run(["git", "diff", "--cached", "--unified=0"],
+                         capture_output=True, text=True, check=True)
+    # Nur hinzugefügte Zeilen prüfen; gelöschte sind ohnehin unterwegs nach draußen.
+    return "\n".join(z[1:] for z in aus.stdout.splitlines()
+                     if z.startswith("+") and not z.startswith("+++"))
+
+
+def main() -> int:
+    from fnmatch import fnmatch
+
+    probleme: list[str] = []
+
+    for pfad in staged_dateien():
+        name = pfad.split("/")[-1]
+        for muster in VERBOTENE_DATEIEN:
+            if fnmatch(name, muster) or fnmatch(pfad, muster):
+                probleme.append(f"  {pfad} — gehört nicht ins Repository")
+                break
+
+    inhalt = staged_inhalt()
+    for muster, was in VERBOTENE_INHALTE:
+        if muster.search(inhalt):
+            probleme.append(f"  sieht aus wie ein {was}")
+
+    if not probleme:
+        return 0
+
+    print("Commit gestoppt – Zugangsdaten im Index:\n", file=sys.stderr)
+    for zeile in dict.fromkeys(probleme):
+        print(zeile, file=sys.stderr)
+    print("\nAus dem Index nehmen:  git reset <datei>", file=sys.stderr)
+    print("Siehe README.md, Abschnitt „Was nie ins Repository darf“.",
+          file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
