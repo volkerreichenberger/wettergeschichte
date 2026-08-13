@@ -5,7 +5,11 @@
 STATION=4931
 # Mehrere durch Leerzeichen getrennt – dann entsteht je Variante ein Beitrag.
 # serie | nyt-jahr | nyt-quartal | nyt-3monate | drei-tage
-VARIANTE="serie drei-tage"
+VARIANTE="serie drei-tage bewoelkung"
+
+# Die Bewölkung kommt von einer anderen Station: an 4931 Echterdingen fehlt
+# der Bedeckungsgrad von Juni 2022 bis August 2023 vollständig.
+BEWOELKUNG_STATION=4928
 
 # --- Bild öffentlich ablegen ------------------------------------------------
 # Die Instagram-API lädt keine Datei hoch, sie holt sie von einer URL.

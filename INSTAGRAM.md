@@ -170,10 +170,28 @@ Zur Wahl stehen:
 | Variante | Beitrag |
 |---|---|
 | `serie` | Karussell: Ganzjahresbild, die vier jüngsten Quartale, Legende |
+| `bewoelkung` | einmal im Monat: Bewölkungskalender des Vormonats und der fünf Vorjahre, dazu ein Streifenbild über neun Jahre |
 | `drei-tage` | die letzten drei Tage im Stundenverlauf |
 | `nyt-quartal` | nur das laufende Quartal |
 | `nyt-3monate` | die letzten drei Monate, gleitend |
 | `nyt-jahr` | das ganze Kalenderjahr |
+
+### Die Bewölkung – einmal im Monat
+
+`bewoelkung` läuft täglich mit, tut aber fast immer nichts: Das Skript baut den
+Beitrag erst, wenn der Vormonat vollständig vorliegt, und überspringt ihn, wenn
+der Ordner schon existiert. In beiden Fällen endet es mit Rückgabewert 3, den
+`post_daily.sh` als „nichts zu tun“ und nicht als Fehler wertet.
+
+Zwei Besonderheiten:
+
+* **Andere Station.** Der Bedeckungsgrad kommt von **4928 Schnarrenberg**,
+  nicht von 4931 – dort fehlt er von Juni 2022 bis August 2023 vollständig.
+  `post_daily.sh` holt deshalb die Daten beider Stationen und gibt jeder
+  Variante die passende mit (`BEWOELKUNG_STATION`).
+* **Toleranz.** Bis zu zwei fehlende Tage im Monat sind erlaubt; sie bleiben im
+  Bild leer und werden im Begleittext benannt. Ohne diese Toleranz würde ein
+  einzelner Messausfall den Monatsbeitrag für immer blockieren.
 
 ### Die Serie
 

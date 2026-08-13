@@ -23,6 +23,10 @@ PUBLISH=0    # Beitrag wirklich veröffentlichen
 SKIP_FETCH=0
 STAND=""     # Stichtag: Beitrag so bauen, wie er an dem Tag ausgesehen haette
 
+# Die Bewölkung kommt von einer anderen Station: an 4931 fehlt der
+# Bedeckungsgrad von Juni 2022 bis August 2023 vollständig.
+BEWOELKUNG_STATION="${BEWOELKUNG_STATION:-4928}"
+
 # GitHub Pages baut nach einem Push erst neu; bis dahin liefert die URL 404.
 # Instagram würde in dieser Zeit mit ERROR abbrechen, deshalb wird gewartet.
 WAIT_SECONDS=300
@@ -73,6 +77,14 @@ warte_auf_bild() {
 # VARIANTE darf mehrere Werte enthalten, durch Leerzeichen getrennt – dann
 # entsteht je Variante ein eigener Beitrag. Erst alle prüfen, damit ein Tippfehler
 # nicht auffällt, nachdem der erste Beitrag schon veröffentlicht ist.
+station_fuer() {
+  # Welche Station liefert die Daten dieser Variante?
+  case "$1" in
+    bewoelkung) echo "$BEWOELKUNG_STATION" ;;
+    *)          echo "$STATION" ;;
+  esac
+}
+
 setze_build() {
   case "$1" in
     serie)       BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum serie) ;;
@@ -80,8 +92,10 @@ setze_build() {
     nyt-quartal) BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum quartal) ;;
     nyt-3monate) BUILD=(plots/python/nyt_post_matplotlib.py --zeitraum monate --months 3) ;;
     drei-tage)   BUILD=(plots/python/drei_tage_matplotlib.py) ;;
+    bewoelkung)  BUILD=(plots/python/bewoelkung_matplotlib.py) ;;
     *) echo "unbekannte Variante: $1" >&2
-       echo "möglich: serie nyt-jahr nyt-quartal nyt-3monate drei-tage" >&2; return 2 ;;
+       echo "möglich: serie nyt-jahr nyt-quartal nyt-3monate drei-tage bewoelkung" >&2
+       return 2 ;;
   esac
 }
 for VAR in $VARIANTE; do setze_build "$VAR" || exit 2; done
@@ -113,8 +127,16 @@ fi
 # 1. Daten aktualisieren
 # ---------------------------------------------------------------------------
 if [ "$SKIP_FETCH" -eq 0 ]; then
-  echo "-- Daten holen"
-  "$PYTHON" fetch_dwd.py --stations "$STATION"
+  # Alle Stationen einsammeln, die irgendeine Variante braucht, und doppelte
+  # entfernen – sonst holt der Lauf dieselben Dateien zweimal.
+  STATIONEN=""
+  for VAR in $VARIANTE; do
+    S="$(station_fuer "$VAR")"
+    case " $STATIONEN " in *" $S "*) ;; *) STATIONEN="$STATIONEN $S" ;; esac
+  done
+  echo "-- Daten holen (Stationen:$STATIONEN)"
+  # shellcheck disable=SC2086
+  "$PYTHON" fetch_dwd.py --stations $STATIONEN
   "$PYTHON" fetch_hourly.py --stations "$STATION"
   echo "-- Kennzahlen ableiten"
   # Auch das Vorjahr: die Quartalsserie reicht bis zu drei Quartale zurück und
@@ -132,11 +154,23 @@ setze_build "$VAR"
 # ---------------------------------------------------------------------------
 # 2. Beitrag bauen
 # ---------------------------------------------------------------------------
-printf '\n-- Beitrag bauen: %s\n' "$VAR"
-BUILD_ARGS=(--station "$STATION")
-[ -n "$STAND" ] && BUILD_ARGS+=(--stand "$STAND")
+printf '\n-- Beitrag bauen: %s (Station %s)\n' "$VAR" "$(station_fuer "$VAR")"
+BUILD_ARGS=(--station "$(station_fuer "$VAR")")
+# Die Monatsgrafik kennt keinen Stichtag, sie entscheidet selbst über den Monat.
+[ -n "$STAND" ] && [ "$VAR" != "bewoelkung" ] && BUILD_ARGS+=(--stand "$STAND")
+set +e
 BUILD_OUT="$("$PYTHON" "${BUILD[@]}" "${BUILD_ARGS[@]}")"
+BUILD_RC=$?
+set -e
 echo "$BUILD_OUT"
+# Rückgabewert 3 heißt "nichts zu tun" – etwa ein Monat, der noch läuft.
+if [ "$BUILD_RC" -eq 3 ]; then
+  echo "   $VAR übersprungen."
+  continue
+elif [ "$BUILD_RC" -ne 0 ]; then
+  echo "   $VAR fehlgeschlagen (Rückgabewert $BUILD_RC)." >&2
+  FEHLER=1; continue
+fi
 
 POST_DIR="$(printf '%s\n' "$BUILD_OUT" | sed -n 's/^POST_DIR=//p' | tail -1)"
 if [ -z "$POST_DIR" ] || [ ! -d "$POST_DIR" ]; then

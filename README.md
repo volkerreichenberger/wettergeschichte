@@ -4,25 +4,112 @@ Grafische Auswertung von Wetterdaten des Deutschen Wetterdienstes für die
 beiden Stuttgarter Stationen im Stil des klassischen
 [New-York-Times-Wetterdiagramms](https://graphics8.nytimes.com/images/2016/02/19/multimedia/oakImage-1455906157517/oakImage-1455906157517-superJumbo.png).
 
-| Station | Name | Höhe | Daten seit |
-|---|---|---|---|
-| 4928 | Stuttgart (Schnarrenberg) | 314 m | 1958 |
-| 4931 | Stuttgart-Echterdingen | 371 m | 1953 |
+| Station | Name | Höhe | Daten seit | |
+|---|---|---|---|---|
+| 4931 | Stuttgart-Echterdingen | 371 m | 1953 | **wird auf Instagram gezeigt**, dort als „Stuttgart (Süd)" |
+| 4928 | Stuttgart (Schnarrenberg) | 314 m | 1958 | nur für Vergleiche, hat als einzige Strahlungsdaten |
 
-## Schnellstart
+---
+
+# Der tägliche Ablauf
+
+**Ein Befehl macht alles:**
 
 ```bash
-python run_all.py                 # Daten holen, Kennzahlen ableiten, alle Grafiken bauen
-open output/                      # Varianten vergleichen
+cd ~/Programming/wettergeschichte
+./post_daily.sh --publish
 ```
 
-Einzelne Schritte:
+Der Reihe nach: Token prüfen und bei Bedarf verlängern → Daten beim DWD
+holen → Kennzahlen ableiten → beide Beiträge bauen → Bilder in die
+Bildablage schieben → auf Instagram veröffentlichen.
+
+**Nicht vor 9:15 Uhr laufen lassen.** Der DWD schiebt die Daten des Vortags
+morgens gegen 8:40 bis 9:00 Uhr nach. Wer früher startet, baut den Beitrag mit
+vorgestrigen Zahlen — das Skript merkt das nicht, weil es keine Lücke gibt,
+sondern nur einen Tag weniger.
+
+### Wenn du es Schritt für Schritt willst
 
 ```bash
-python fetch_dwd.py               # nur Daten aktualisieren (inkrementell)
-python fetch_dwd.py --status      # zeigen, was lokal liegt
-python climatology.py --year 2026 # Normalen, Rekorde und Jahreswerte ableiten
-python run_all.py --skip-fetch --only matplotlib   # nur neu zeichnen
+# 1. Daten holen (macht nichts, wenn der DWD nichts Neues hat)
+python3 fetch_dwd.py --stations 4931
+python3 fetch_hourly.py --stations 4931
+
+# 2. Ist gestern schon dabei? Letzte Spalte lesen.
+python3 fetch_dwd.py --status
+python3 fetch_hourly.py --status
+
+# 3. Trockenlauf: baut die Bilder, zeigt den Bildtext, sendet nichts
+./post_daily.sh --skip-fetch
+
+# 4. Wenn es passt, wirklich veröffentlichen
+./post_daily.sh --skip-fetch --publish
+```
+
+`--status` geht nicht ins Netz, es liest nur den lokalen Bestand. Steht dort
+noch das vorgestrige Datum, hat der DWD schlicht noch nicht aktualisiert —
+dann eine halbe Stunde warten und Schritt 1 wiederholen.
+
+### Was dabei entsteht
+
+Zwei Beiträge, festgelegt über `VARIANTE` in `post_daily.conf`:
+
+| Variante | Beitrag | wie oft |
+|---|---|---|
+| `serie` | Karussell aus sechs Bildern: das Kalenderjahr, die vier jüngsten Quartale, die Legende | täglich |
+| `drei-tage` | die letzten drei Tage im Stundenverlauf, dahinter dieselben Tage der fünf Vorjahre | täglich |
+| `bewoelkung` | Bewölkungskalender des Vormonats und der fünf Vorjahre, dazu ein Streifenbild über neun Jahre | einmal im Monat |
+
+`bewoelkung` läuft täglich mit, tut aber fast immer nichts: Der Beitrag entsteht
+erst, wenn der Vormonat vollständig vorliegt, und wird übersprungen, sobald es
+ihn gibt. Er kommt außerdem von **Station 4928 Schnarrenberg** — an 4931 fehlt
+der Bedeckungsgrad von Juni 2022 bis August 2023. `post_daily.sh` holt deshalb
+die Daten beider Stationen.
+
+Jeder Beitrag landet als eigener Ordner unter `posts/` mit `bild.jpg`
+(beziehungsweise `bild_1.jpg` … `bild_6.jpg`) und `text.txt`.
+
+**Achtung bei Handänderungen am Bildtext:** Jeder Lauf von `post_daily.sh`
+baut Bild *und* `text.txt` neu und überschreibt sie. Wer den Text vor dem
+Veröffentlichen anpassen will, geht deshalb am Skript vorbei — die Bilder
+liegen nach Schritt 3 ja schon hochgeladen bereit:
+
+```bash
+POST=posts/drei_tage_04931_2026-08-10
+$EDITOR $POST/text.txt
+set -a; . ./post_daily.conf; set +a
+python3 instagram_post.py --caption-file $POST/text.txt \
+    --image-url https://volkerreichenberger.github.io/wettergeschichtebilder/$(basename $POST)_bild.jpg \
+    --publish
+```
+
+### Wenn etwas schiefgeht
+
+| Meldung | Bedeutung |
+|---|---|
+| `unverändert` beim Holen | Der DWD hat nichts Neues. Kein Fehler. |
+| `nach 300s nicht in der erwarteten Fassung da` | GitHub Pages liefert das Bild noch nicht aus. Später erneut versuchen; veröffentlicht wird in dem Fall nichts. |
+| `Token wird verlängert` | Normalbetrieb, passiert unter 14 Resttagen automatisch. |
+| `Session key invalid` beim Token | Das Token ist abgelaufen. Neu erzeugen im Meta-Dashboard, siehe [INSTAGRAM.md](INSTAGRAM.md). |
+
+Automatisch täglich:
+
+```cron
+15 9 * * *  cd ~/Programming/wettergeschichte && ./post_daily.sh --publish >> log/post.log 2>&1
+```
+
+---
+
+## Alles neu zeichnen, zum Vergleichen
+
+Neben den Instagram-Beiträgen gibt es die Werkstatt: `run_all.py` baut jede
+Variante in jeder Bibliothek, für beide Stationen, nach `output/`.
+
+```bash
+python3 run_all.py                                  # alles
+python3 run_all.py --skip-fetch --only matplotlib   # nur neu zeichnen
+python3 climatology.py --year 2026                  # nur Kennzahlen ableiten
 ```
 
 Gebraucht werden Python (pandas, numpy, matplotlib; für einzelne Varianten
@@ -33,15 +120,19 @@ läuft weiter.
 ## Aufbau
 
 ```
-fetch_dwd.py        holt die DWD-Rohdaten, inkrementell
+post_daily.sh       der tägliche Ablauf, siehe oben
+post_daily.conf     Station, Varianten, Bildablage, Zugangsdaten (nicht im Repo)
+fetch_dwd.py        holt die DWD-Tageswerte, inkrementell
+fetch_hourly.py     holt die stündlichen Lufttemperaturen
 dwd_datasets.py     Katalog der Datensätze und Spaltennamen
 climatology.py      leitet Normalen, Rekorde und Jahreswerte ab
-run_all.py          baut alles der Reihe nach
-instagram_post.py   veröffentlicht ein Bild über die Instagram-API
-plots/python/       matplotlib, plotnine, plotly, Instagram-Karte
+instagram_post.py   veröffentlicht Bild und Text über die Instagram-API
+run_all.py          baut alle Varianten zum Vergleichen
+plots/python/       matplotlib, plotnine, plotly
 plots/R/            ggplot2, lattice, base graphics
 data/               Rohdaten, aufbereitete CSVs, abgeleitete Kennzahlen
-output/             die fertigen Bilder
+posts/              je Beitrag ein Ordner mit Bild und Begleittext
+output/             die Vergleichsbilder aus run_all.py
 ```
 
 ## Die Daten
@@ -171,8 +262,10 @@ Je Beitrag entsteht ein eigener Ordner, damit ein Upload-Skript später nur auf
 das Verzeichnis zeigen muss:
 
 ```
-posts/nyt_h1_04931_2026-08-09/bild.jpg
-posts/nyt_h1_04931_2026-08-09/text.txt
+posts/nyt_serie_04931_2026-08-10/bild_1.jpg … bild_6.jpg
+posts/nyt_serie_04931_2026-08-10/text.txt
+posts/drei_tage_04931_2026-08-10/bild.jpg
+posts/drei_tage_04931_2026-08-10/text.txt
 ```
 
 Das NYT-Diagramm gibt es in vier Zuschnitten:
@@ -236,17 +329,21 @@ python climatology.py --reference 1961 1990
 
 ## Instagram
 
-Ja, das Veröffentlichen geht über eine API – Details, Einrichtung und
-Stolpersteine stehen in [INSTAGRAM.md](INSTAGRAM.md). Kurz:
+Der Kanal heißt **wettergeschichte**. Der tägliche Ablauf steht oben; alles
+Weitere – Einrichtung der Meta-App, Zugriffstoken, Bildablage, Karussell,
+Stolpersteine – in [INSTAGRAM.md](INSTAGRAM.md).
 
-```bash
-python plots/python/instagram_card.py --station 4931 --year 2026
-```
+Drei Dinge, die man wissen sollte:
 
-erzeugt eine Fassung im Hochformat 1080 × 1350 als JPEG plus einen fertigen
-Bildtext daneben. `instagram_post.py` schickt beides über die Content
-Publishing API los. Der wichtigste Haken: die API lädt keine Datei hoch,
-sondern holt sich das Bild von einer öffentlich erreichbaren URL.
+* **Die API lädt keine Datei hoch.** Sie holt sich das Bild von einer
+  öffentlich erreichbaren URL. Deshalb wandern die JPGs zuerst in das
+  Repository [wettergeschichtebilder](https://github.com/volkerreichenberger/wettergeschichtebilder)
+  und werden über GitHub Pages ausgeliefert.
+* **Nur JPEG**, höchstens 10 Bilder je Karussell, Bildtext bis 2200 Zeichen,
+  100 API-Beiträge je Konto und 24 Stunden.
+* **Das Zugriffstoken gilt 60 Tage.** `post_daily.sh` verlängert es
+  selbsttätig, sobald weniger als 14 Tage bleiben. Läuft es doch einmal ab,
+  hilft nur der Weg über das Meta-Dashboard.
 
 ## Datenquelle
 
