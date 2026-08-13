@@ -17,7 +17,7 @@ beiden Stuttgarter Stationen im Stil des klassischen
 
 ```bash
 cd ~/Programming/wettergeschichte
-./post_daily.sh --publish
+./post_daily.py --publish
 ```
 
 Der Reihe nach: Token prüfen und bei Bedarf verlängern → Daten beim DWD
@@ -41,10 +41,10 @@ python3 fetch_dwd.py --status
 python3 fetch_hourly.py --status
 
 # 3. Trockenlauf: baut die Bilder, zeigt den Bildtext, sendet nichts
-./post_daily.sh --skip-fetch
+./post_daily.py --skip-fetch
 
 # 4. Wenn es passt, wirklich veröffentlichen
-./post_daily.sh --skip-fetch --publish
+./post_daily.py --skip-fetch --publish
 ```
 
 `--status` geht nicht ins Netz, es liest nur den lokalen Bestand. Steht dort
@@ -64,13 +64,13 @@ Zwei Beiträge, festgelegt über `VARIANTE` in `post_daily.conf`:
 `bewoelkung` läuft täglich mit, tut aber fast immer nichts: Der Beitrag entsteht
 erst, wenn der Vormonat vollständig vorliegt, und wird übersprungen, sobald es
 ihn gibt. Er kommt außerdem von **Station 4928 Schnarrenberg** — an 4931 fehlt
-der Bedeckungsgrad von Juni 2022 bis August 2023. `post_daily.sh` holt deshalb
+der Bedeckungsgrad von Juni 2022 bis August 2023. `post_daily.py` holt deshalb
 die Daten beider Stationen.
 
 Jeder Beitrag landet als eigener Ordner unter `posts/` mit `bild.jpg`
 (beziehungsweise `bild_1.jpg` … `bild_6.jpg`) und `text.txt`.
 
-**Achtung bei Handänderungen am Bildtext:** Jeder Lauf von `post_daily.sh`
+**Achtung bei Handänderungen am Bildtext:** Jeder Lauf von `post_daily.py`
 baut Bild *und* `text.txt` neu und überschreibt sie. Wer den Text vor dem
 Veröffentlichen anpassen will, geht deshalb am Skript vorbei — die Bilder
 liegen nach Schritt 3 ja schon hochgeladen bereit:
@@ -96,7 +96,7 @@ python3 instagram_post.py --caption-file $POST/text.txt \
 Automatisch täglich:
 
 ```cron
-15 9 * * *  cd ~/Programming/wettergeschichte && ./post_daily.sh --publish >> log/post.log 2>&1
+15 9 * * *  cd ~/Programming/wettergeschichte && ./post_daily.py --publish >> log/post.log 2>&1
 ```
 
 ---
@@ -120,7 +120,7 @@ läuft weiter.
 ## Aufbau
 
 ```
-post_daily.sh       der tägliche Ablauf, siehe oben
+post_daily.py       der tägliche Ablauf, siehe oben
 post_daily.conf     Station, Varianten, Bildablage, Zugangsdaten (nicht im Repo)
 fetch_dwd.py        holt die DWD-Tageswerte, inkrementell
 fetch_hourly.py     holt die stündlichen Lufttemperaturen
@@ -341,7 +341,7 @@ Drei Dinge, die man wissen sollte:
   und werden über GitHub Pages ausgeliefert.
 * **Nur JPEG**, höchstens 10 Bilder je Karussell, Bildtext bis 2200 Zeichen,
   100 API-Beiträge je Konto und 24 Stunden.
-* **Das Zugriffstoken gilt 60 Tage.** `post_daily.sh` verlängert es
+* **Das Zugriffstoken gilt 60 Tage.** `post_daily.py` verlängert es
   selbsttätig, sobald weniger als 14 Tage bleiben. Läuft es doch einmal ab,
   hilft nur der Weg über das Meta-Dashboard.
 

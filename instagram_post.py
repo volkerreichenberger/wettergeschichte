@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -214,20 +215,26 @@ def days_left(expires: str | None) -> int | None:
 
 
 def write_conf(path: Path, token: str, expires: str) -> None:
-    """Token und Ablaufdatum in post_daily.conf ersetzen oder anhängen."""
+    """Token und Ablaufdatum in post_daily.conf ersetzen oder anhängen.
+
+    Ein führendes ``export`` wird mitgelesen, aber nicht mitgeschrieben – die
+    Konfiguration ist seit der Umstellung auf post_daily.py schlichtes
+    ``SCHLÜSSEL=WERT``.
+    """
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    paare = (("IG_ACCESS_TOKEN", token), ("IG_TOKEN_EXPIRES", expires))
     out, seen = [], set()
     for line in lines:
-        for key, value in (("IG_ACCESS_TOKEN", token), ("IG_TOKEN_EXPIRES", expires)):
-            if line.startswith(f"export {key}="):
-                out.append(f"export {key}={value}")
+        for key, value in paare:
+            if re.match(rf"^\s*(export\s+)?{key}\s*=", line):
+                out.append(f"{key}={value}")
                 seen.add(key)
                 break
         else:
             out.append(line)
-    for key, value in (("IG_ACCESS_TOKEN", token), ("IG_TOKEN_EXPIRES", expires)):
+    for key, value in paare:
         if key not in seen:
-            out.append(f"export {key}={value}")
+            out.append(f"{key}={value}")
     path.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 

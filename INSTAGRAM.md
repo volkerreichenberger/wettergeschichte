@@ -56,7 +56,7 @@ Zwei Fallstricke:
 
 ### Das Token läuft nicht ab
 
-`post_daily.sh` prüft bei jedem Lauf, wie lange das Token noch gilt, und
+`post_daily.py` prüft bei jedem Lauf, wie lange das Token noch gilt, und
 verlängert es, sobald weniger als 14 Tage bleiben (`TOKEN_MIN_DAYS`). Das neue
 Token und sein Ablaufdatum schreibt es selbst in `post_daily.conf`.
 
@@ -80,7 +80,7 @@ Für das Format: das breite 16:9-Diagramm wird im Feed winzig dargestellt.
 
 In diesem Projekt: im eigenen Repository
 [wettergeschichtebilder](https://github.com/volkerreichenberger/wettergeschichtebilder),
-ausgeliefert über GitHub Pages. `post_daily.sh` kopiert das fertige JPEG dorthin,
+ausgeliefert über GitHub Pages. `post_daily.py` kopiert das fertige JPEG dorthin,
 committet, pusht – und übergibt Instagram die URL
 
 ```
@@ -97,7 +97,7 @@ oder eigener Webspace per `scp` – Vorlagen dafür stehen in
 Die URL muss zum Zeitpunkt des Postens erreichbar sein. Danach kann das Bild
 wieder verschwinden; Instagram hat es dann bereits kopiert. **Achtung:** Nach
 dem Push braucht GitHub Pages typischerweise ein bis zwei Minuten, bis die
-Datei ausgeliefert wird – `post_daily.sh` sollte also nicht unmittelbar nach
+Datei ausgeliefert wird – `post_daily.py` sollte also nicht unmittelbar nach
 dem Upload veröffentlichen. Falls Instagram `ERROR` meldet, ist das die erste
 Ursache, die zu prüfen ist.
 
@@ -139,14 +139,14 @@ Ohne `--publish` passiert nichts – es wird nur angezeigt, was gesendet würde.
 
 ## Täglich automatisch
 
-`post_daily.sh` macht die vier Schritte am Stück: Daten holen, Beitrag bauen,
+`post_daily.py` macht die vier Schritte am Stück: Daten holen, Beitrag bauen,
 Bild hochladen, veröffentlichen.
 
 ```bash
 cp post_daily.conf.example post_daily.conf   # einmalig, dann ausfüllen
-./post_daily.sh                              # Trockenlauf: baut alles, sendet nichts
-./post_daily.sh --publish                    # wirklich veröffentlichen
-./post_daily.sh --variante drei-tage --station 4928 --publish
+./post_daily.py                              # Trockenlauf: baut alles, sendet nichts
+./post_daily.py --publish                    # wirklich veröffentlichen
+./post_daily.py --variante drei-tage --station 4928 --publish
 ```
 
 Ohne `post_daily.conf` läuft nur der Trockenlauf – so lässt sich der ganze Weg
@@ -181,13 +181,13 @@ Zur Wahl stehen:
 `bewoelkung` läuft täglich mit, tut aber fast immer nichts: Das Skript baut den
 Beitrag erst, wenn der Vormonat vollständig vorliegt, und überspringt ihn, wenn
 der Ordner schon existiert. In beiden Fällen endet es mit Rückgabewert 3, den
-`post_daily.sh` als „nichts zu tun“ und nicht als Fehler wertet.
+`post_daily.py` als „nichts zu tun“ und nicht als Fehler wertet.
 
 Zwei Besonderheiten:
 
 * **Andere Station.** Der Bedeckungsgrad kommt von **4928 Schnarrenberg**,
   nicht von 4931 – dort fehlt er von Juni 2022 bis August 2023 vollständig.
-  `post_daily.sh` holt deshalb die Daten beider Stationen und gibt jeder
+  `post_daily.py` holt deshalb die Daten beider Stationen und gibt jeder
   Variante die passende mit (`BEWOELKUNG_STATION`).
 * **Toleranz.** Bis zu zwei fehlende Tage im Monat sind erlaubt; sie bleiben im
   Bild leer und werden im Begleittext benannt. Ohne diese Toleranz würde ein
@@ -205,7 +205,7 @@ Zwei Besonderheiten:
 Die Quartale sind starr am Kalender ausgerichtet (Jan–Mär, Apr–Jun, Jul–Sep,
 Okt–Dez). Am 1. April springt die Scheibe um und zeigt zunächst nur einen Tag –
 dafür sind die Bilder untereinander vergleichbar. Die drei Vorgänger reichen im
-ersten Halbjahr ins Vorjahr zurück; `post_daily.sh` leitet die Kennzahlen
+ersten Halbjahr ins Vorjahr zurück; `post_daily.py` leitet die Kennzahlen
 deshalb für das laufende **und** das vorige Jahr ab.
 
 Zwei Dinge, die die Serie erst ehrlich machen:
@@ -223,7 +223,7 @@ fehlerhaften Container anzulegen.
 
 ```cron
 # jeden Morgen um 8:15
-15 8 * * *  cd ~/Programming/wettergeschichte && ./post_daily.sh --publish >> log/post.log 2>&1
+15 8 * * *  cd ~/Programming/wettergeschichte && ./post_daily.py --publish >> log/post.log 2>&1
 ```
 
 Zwei Dinge dabei beachten:

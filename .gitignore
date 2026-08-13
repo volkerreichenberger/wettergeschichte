@@ -11,5 +11,5 @@ __pycache__/
 .DS_Store
 log/
 
-# Zugangsdaten und lokale Einstellungen
-post_daily.conf
+# Zugangsdaten und lokale Einstellungen – auch Sicherungskopien davon
+post_daily.conf*

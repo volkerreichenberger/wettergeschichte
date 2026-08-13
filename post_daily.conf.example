@@ -1,5 +1,9 @@
-# Einstellungen für post_daily.sh.
+# Einstellungen für post_daily.py.
 # Kopieren nach post_daily.conf (steht in .gitignore, enthält Zugangsdaten).
+#
+# Format: SCHLÜSSEL=WERT, eine Zeile je Eintrag, keine mehrzeiligen Werte.
+# $NAME und ${NAME} werden gegen bereits gelesene Schlüssel ersetzt. Die Datei
+# bleibt mit 'set -a; . ./post_daily.conf; set +a' auch aus der Shell lesbar.
 
 # Welche Station und welche Grafik täglich veröffentlicht werden soll.
 STATION=4931
@@ -23,9 +27,9 @@ BEWOELKUNG_STATION=4928
 # Variante B: GitHub Pages – ein eigenes öffentliches Repository für die Bilder.
 # Der Commit wird übersprungen, wenn sich am Bild nichts geändert hat, sonst
 # bricht git mit "nothing to commit" ab und reißt den Lauf mit.
-# BILDER=~/Programming/wettergeschichtebilder
-# WG_UPLOAD_CMD='cp {src} '"$BILDER"'/{name} && git -C '"$BILDER"' add -A && { git -C '"$BILDER"' diff --cached --quiet || git -C '"$BILDER"' commit -q -m "{name}"; } && git -C '"$BILDER"' push -q'
-# WG_PUBLIC_URL='https://BENUTZERNAME.github.io/wettergeschichtebilder/{name}'
+# BILDER=/Users/name/Programming/wettergeschichtebilder
+# WG_UPLOAD_CMD=cp {src} $BILDER/{name} && git -C $BILDER add -A && { git -C $BILDER diff --cached --quiet || git -C $BILDER commit -q -m "{name}"; } && git -C $BILDER push -q
+# WG_PUBLIC_URL=https://BENUTZERNAME.github.io/wettergeschichtebilder/{name}
 
 # Variante C: S3-kompatibler Speicher (Cloudflare R2, Backblaze B2, AWS)
 # WG_UPLOAD_CMD='aws s3 cp {src} s3://wettergeschichte/{name} --acl public-read'
