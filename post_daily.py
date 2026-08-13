@@ -44,6 +44,7 @@ VARIANTEN: dict[str, list[str]] = {
                     "--months", "3"],
     "drei-tage":   ["plots/python/drei_tage_matplotlib.py"],
     "bewoelkung":  ["plots/python/bewoelkung_matplotlib.py"],
+    "regen-kumulativ": ["plots/python/regen_matplotlib.py", "--art", "kumulativ"],
 }
 
 #: Varianten, die nicht die Hauptstation nehmen. An 4931 fehlt der
@@ -55,7 +56,7 @@ EIGENE_STATION = {"bewoelkung": "BEWOELKUNG_STATION"}
 NICHTS_ZU_TUN = 3
 
 #: Diese Varianten brauchen keine Stundenwerte.
-OHNE_STUNDENWERTE = {"bewoelkung"}
+OHNE_STUNDENWERTE = {"bewoelkung", "regen-kumulativ"}
 
 
 # --------------------------------------------------------------------------- #

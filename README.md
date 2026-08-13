@@ -4,10 +4,16 @@ Grafische Auswertung von Wetterdaten des Deutschen Wetterdienstes für die
 beiden Stuttgarter Stationen im Stil des klassischen
 [New-York-Times-Wetterdiagramms](https://graphics8.nytimes.com/images/2016/02/19/multimedia/oakImage-1455906157517/oakImage-1455906157517-superJumbo.png).
 
-| Station | Name | Höhe | Daten seit | |
+| Station | Name | Höhe | Daten seit | wird verwendet für |
 |---|---|---|---|---|
-| 4931 | Stuttgart-Echterdingen | 371 m | 1953 | **wird auf Instagram gezeigt**, dort als „Stuttgart (Süd)" |
-| 4928 | Stuttgart (Schnarrenberg) | 314 m | 1958 | nur für Vergleiche, hat als einzige Strahlungsdaten |
+| 4931 | Stuttgart-Echterdingen | 371 m | 1953 | Temperaturbeiträge; auf Instagram als „Stuttgart (Süd)" |
+| 4928 | Stuttgart (Schnarrenberg) | 314 m | 1958 | den Bewölkungsbeitrag, Strahlungsdaten, Vergleiche |
+
+Beide Stationen erscheinen also auf Instagram. Der Grund für die Aufteilung ist
+kein gestalterischer, sondern ein Loch in den Daten: An 4931 fehlt der
+**Bedeckungsgrad von Juni 2022 bis August 2023** vollständig — 15 Monate am
+Stück. An 4928 ist dieselbe Reihe praktisch lückenlos, deshalb kommt die
+Bewölkung von dort. Der Begleittext des Beitrags sagt das und nennt den Grund.
 
 ---
 
@@ -33,8 +39,8 @@ sondern nur einen Tag weniger.
 
 ```bash
 # 1. Daten holen (macht nichts, wenn der DWD nichts Neues hat)
-python3 fetch_dwd.py --stations 4931
-python3 fetch_hourly.py --stations 4931
+python3 fetch_dwd.py --stations 4931 4928     # 4928 für die Bewölkung
+python3 fetch_hourly.py --stations 4931       # Stundenwerte nur für 4931
 
 # 2. Ist gestern schon dabei? Letzte Spalte lesen.
 python3 fetch_dwd.py --status
@@ -53,13 +59,15 @@ dann eine halbe Stunde warten und Schritt 1 wiederholen.
 
 ### Was dabei entsteht
 
-Zwei Beiträge, festgelegt über `VARIANTE` in `post_daily.conf`:
+Welche Beiträge entstehen, legt `VARIANTE` in `post_daily.conf` fest —
+mehrere durch Leerzeichen getrennt:
 
 | Variante | Beitrag | wie oft |
 |---|---|---|
 | `serie` | Karussell aus sechs Bildern: das Kalenderjahr, die vier jüngsten Quartale, die Legende | täglich |
 | `drei-tage` | die letzten drei Tage im Stundenverlauf, dahinter dieselben Tage der fünf Vorjahre | täglich |
 | `bewoelkung` | Bewölkungskalender des Vormonats und der fünf Vorjahre, dazu ein Streifenbild über neun Jahre | einmal im Monat |
+| `regen-kumulativ` | vier Jahre untereinander, jedes als Summenkurve gegen den Normalverlauf | nach Bedarf |
 
 `bewoelkung` läuft täglich mit, tut aber fast immer nichts: Der Beitrag entsteht
 erst, wenn der Vormonat vollständig vorliegt, und wird übersprungen, sobald es
@@ -70,9 +78,9 @@ ihn gibt. Einen anderen Monat nachträglich bauen und posten:
 ./post_daily.py --variante bewoelkung --monat 2026-01 --publish
 ```
 
-`--force` baut auch dann, wenn den Ordner schon gibt. Er kommt außerdem von **Station 4928 Schnarrenberg** — an 4931 fehlt
-der Bedeckungsgrad von Juni 2022 bis August 2023. `post_daily.py` holt deshalb
-die Daten beider Stationen.
+`--force` baut auch dann, wenn es den Ordner schon gibt. Der Beitrag kommt von
+**Station 4928**, die übrigen von 4931 — `post_daily.py` holt deshalb die Daten
+beider Stationen und gibt jeder Variante die passende mit.
 
 Jeder Beitrag landet als eigener Ordner unter `posts/` mit `bild.jpg`
 (beziehungsweise `bild_1.jpg` … `bild_6.jpg`) und `text.txt`.
@@ -167,7 +175,7 @@ läuft weiter.
 post_daily.py       der tägliche Ablauf, siehe oben
 post_daily.conf     Station, Varianten, Bildablage, Zugangsdaten (nicht im Repo)
 fetch_dwd.py        holt die DWD-Tageswerte, inkrementell
-fetch_hourly.py     holt die stündlichen Lufttemperaturen
+fetch_hourly.py     holt die Stundenwerte (Temperatur, Niederschlag)
 dwd_datasets.py     Katalog der Datensätze und Spaltennamen
 climatology.py      leitet Normalen, Rekorde und Jahreswerte ab
 instagram_post.py   veröffentlicht Bild und Text über die Instagram-API
@@ -215,14 +223,21 @@ data/stations/04931/daily.csv       alle Datensätze auf das Datum gejoint
 
 ### Was in den Daten auffällt
 
-Beides sind echte Eigenheiten der Messreihen, keine Fehler der Skripte:
+Alles davon sind echte Eigenheiten der Messreihen, keine Fehler der Skripte:
 
+* **4931 hat beim Bedeckungsgrad ein Loch von Juni 2022 bis August 2023** —
+  15 Monate am Stück, 493 fehlende Tage seit 2021. Bei 4928 fehlen im selben
+  Zeitraum fünf Tage. Deshalb kommt der Bewölkungsbeitrag von 4928.
 * **4931** hat die Sonnenscheindauer im Juli 2023 eingestellt; ab dann steht
   in `sunshine_h` nichts mehr. Für Sonnenschein ist 4928 die Station der Wahl.
 * **4931** fehlen 78 Tage aus dem Jahr 2023 vollständig, **4928** acht Tage
-  aus dem Jahr 2000.
+  aus dem Jahr 2000 und die Julis **2000 bis 2008**.
 * **Strahlungsdaten** (`solar`) gibt es nur für 4928, und sie hinken den
   übrigen Messwerten rund vier Wochen hinterher.
+
+Die beiden Stationen taugen für Temperatur gut als Ersatz füreinander, für
+Bewölkung und Sonnenschein nicht — dort entscheidet die Lücke, welche Station
+brauchbar ist.
 
 ## Die Grafiken
 
@@ -350,11 +365,43 @@ python plots/python/drei_tage_matplotlib.py --station 4931
 python plots/python/drei_tage_matplotlib.py --station 4928 --days 5 --years 3
 ```
 
-Diese Grafik liegt als einzige auf **Stundenwerten** (`fetch_hourly.py`) statt
-auf Tageswerten – aus drei Tagen Tageswerten würden drei Punkte, keine Kurve.
+Diese Grafik liegt auf **Stundenwerten** (`fetch_hourly.py`) statt auf
+Tageswerten – aus drei Tagen Tageswerten würden drei Punkte, keine Kurve.
 Die Vorjahre werden über Monat, Tag und Stunde zugeordnet und liegen damit
 kalendarisch exakt untereinander. Fällt ein 29. Februar ins Fenster, bleibt die
 Kurve in Nicht-Schaltjahren dort lückenhaft.
+
+### Niederschlag
+
+`plots/python/regen_matplotlib.py` sammelt mehrere Sichten auf denselben
+Datensatz, gewählt über `--art`:
+
+| Art | zeigt |
+|---|---|
+| `kumulativ` | vier Jahre untereinander, jedes als Summenkurve gegen den Normalverlauf — die Instagram-Variante |
+| `rueckstand` | dieselben Summenkurven, aber alle in einem Feld übereinander |
+| `kalender` | jeder Tag des Jahres als Kästchen, eingefärbt nach Menge |
+| `konzentration` | wieviel Prozent des Jahresniederschlags an den nassesten Tagen fielen |
+| `trockenheit` | längste Trockenperiode je Jahr |
+| `schnee` | Anteil der Winterniederschlagstage mit Schnee, über die ganze Reihe |
+| `intensitaet` | stärkste Stundenintensität je Jahr, auf Stundenwerten |
+| `streifen` | jeder Tag als Streifen, eine Zeile je Jahr |
+
+```bash
+python plots/python/regen_matplotlib.py --art kumulativ --station 4931
+```
+
+`kumulativ` gibt allen vier Feldern dieselbe Skala und zählt die Tage im
+365-Tage-Schema der Klimatologie – sonst läge die Kurve eines Schaltjahres ab
+März um einen Tag neben dem Normalverlauf. Das laufende Jahr steht oben und
+wird gegen den Normalwert bis zum selben Kalendertag verglichen, nicht gegen
+das ganze Jahr.
+
+Ein Wort zur Vorsicht: Beim Niederschlag ist **kein Trend messbar**. Die
+Jahressummen streuen mit 117 mm, der Rückgang über 72 Jahre beträgt 58 mm — das
+Rauschen ist doppelt so groß wie das Signal. Ein Streifenbild im Stil der
+Warming Stripes wäre hier eine Aussage, die die Daten nicht hergeben.
+Beim Schneeanteil ist es umgekehrt, dort liegt ein deutliches Signal.
 
 ### Optionen
 
