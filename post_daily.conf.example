@@ -8,8 +8,9 @@
 # Welche Station und welche Grafik täglich veröffentlicht werden soll.
 STATION=4931
 # Mehrere durch Leerzeichen getrennt – dann entsteht je Variante ein Beitrag.
-# serie | nyt-jahr | nyt-quartal | nyt-3monate | drei-tage
-VARIANTE="serie drei-tage bewoelkung"
+# serie | nyt-jahr | nyt-quartal | nyt-3monate | drei-tage | bewoelkung |
+# regen-kumulativ
+VARIANTE="serie drei-tage bewoelkung regen-kumulativ"
 
 # Die Bewölkung kommt von einer anderen Station: an 4931 Echterdingen fehlt
 # der Bedeckungsgrad von Juni 2022 bis August 2023 vollständig.

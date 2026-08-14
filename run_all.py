@@ -26,16 +26,9 @@ VARIANTS: list[tuple[str, list[str]]] = [
     ("matplotlib · NYT",        [sys.executable, "plots/python/nyt_matplotlib.py"]),
     ("matplotlib · NYT 3 Mon.", [sys.executable, "plots/python/nyt_matplotlib.py",
                                  "--months", "3"]),
-    ("matplotlib · 5 Jahre",    [sys.executable, "plots/python/fuenf_jahre_matplotlib.py"]),
-    ("matplotlib · 5J Striche", [sys.executable,
-                                 "plots/python/fuenf_jahre_striche_matplotlib.py"]),
-    ("matplotlib · 5J Str 3M",  [sys.executable,
-                                 "plots/python/fuenf_jahre_striche_matplotlib.py",
-                                 "--months", "3"]),
     ("plotnine · NYT",          [sys.executable, "plots/python/nyt_plotnine.py"]),
     ("plotly · NYT",            [sys.executable, "plots/python/nyt_plotly.py"]),
     ("R ggplot2 · NYT",         ["Rscript", "plots/R/nyt_ggplot2.R"]),
-    ("R ggplot2 · 5 Jahre",     ["Rscript", "plots/R/fuenf_jahre_ggplot2.R"]),
     ("R lattice · NYT",         ["Rscript", "plots/R/nyt_lattice.R"]),
     ("R base · NYT",            ["Rscript", "plots/R/nyt_base.R"]),
     # Beiträge: quadratisch, ohne Text im Bild, je Beitrag ein Ordner in posts/
@@ -48,6 +41,10 @@ VARIANTS: list[tuple[str, list[str]]] = [
                                  "--zeitraum", "quartal"]),
     ("Post · NYT 3 Monate",     [sys.executable, "plots/python/nyt_post_matplotlib.py",
                                  "--zeitraum", "monate", "--months", "3"]),
+    # Regen: acht Blicke auf dieselbe Reihe, gewählt über --art.
+    *[(f"Regen · {art}", [sys.executable, "plots/python/regen_matplotlib.py",
+                          "--art", art])
+      for art in ("kumulativ", "rueckstand", "schnee")],
     ("Instagram · NYT",         [sys.executable, "plots/python/instagram_card.py"]),
     ("Instagram · NYT 3 Mon.",  [sys.executable, "plots/python/instagram_card.py",
                                  "--months", "3"]),
@@ -108,7 +105,8 @@ def main(argv: list[str] | None = None) -> int:
             ok &= run(label, [*cmd, "--station", str(station), "--year", str(args.year),
                               "--dpi", str(args.dpi)])
 
-    print(f"\nErgebnisse in {ROOT / 'output'}")
+    print(f"\nVergleichsbilder in {ROOT / 'output'}, "
+          f"Beitraege in {ROOT / 'posts'}")
     return 0 if ok else 1
 
 

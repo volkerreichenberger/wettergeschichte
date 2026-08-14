@@ -35,6 +35,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 CONF = ROOT / "post_daily.conf"
 
+#: Vorgabe, wenn post_daily.conf kein VARIANTE setzt.
+STANDARD_VARIANTEN = "serie drei-tage bewoelkung regen-kumulativ"
+
 #: Bauskript je Variante. Die Station kommt getrennt dazu.
 VARIANTEN: dict[str, list[str]] = {
     "serie":       ["plots/python/nyt_post_matplotlib.py", "--zeitraum", "serie"],
@@ -52,7 +55,7 @@ VARIANTEN: dict[str, list[str]] = {
 EIGENE_STATION = {"bewoelkung": "BEWOELKUNG_STATION"}
 
 #: Ein Bauskript darf so enden, wenn es schlicht nichts zu tun gibt –
-#: etwa ein Monat, der noch läuft. Das ist kein Fehler.
+#: etwa ein Monat, der erst wenige Tage alt ist. Das ist kein Fehler.
 NICHTS_ZU_TUN = 3
 
 #: Diese Varianten brauchen keine Stundenwerte.
@@ -328,14 +331,14 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--station", default=conf.get("STATION", "4931"))
-    ap.add_argument("--variante", default=conf.get("VARIANTE", "serie"),
+    ap.add_argument("--variante", default=conf.get("VARIANTE", STANDARD_VARIANTEN),
                     help="eine oder mehrere, durch Leerzeichen getrennt")
     ap.add_argument("--stand", metavar="JJJJ-MM-TT",
                     help="Beitrag so bauen, wie er an diesem Tag ausgesehen hätte")
     ap.add_argument("--monat", metavar="JJJJ-MM",
-                    help="nur bei bewoelkung: welcher Monat statt des Vormonats")
+                    help="nur bei bewoelkung: welcher Monat statt des laufenden")
     ap.add_argument("--force", action="store_true",
-                    help="nur bei bewoelkung: auch bauen, wenn der Ordner schon da ist")
+                    help="nur bei bewoelkung: einen abgeschlossenen Monat neu bauen")
     ap.add_argument("--publish", action="store_true",
                     help="wirklich veröffentlichen")
     ap.add_argument("--upload-only", dest="upload_only", action="store_true",

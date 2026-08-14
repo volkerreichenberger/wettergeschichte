@@ -36,6 +36,15 @@ VERBOTENE_DATEIEN = [
     ".env.*",
 ]
 
+#: Ausnahmen von den Mustern oben. ``post_daily.conf.*`` ist gegen
+#: Sicherungskopien gerichtet, trifft aber auch die Vorlage – und die gehört
+#: ins Repository, sonst weiß niemand, welche Schlüssel es überhaupt gibt.
+#: Die Inhaltsprüfung unten gilt weiterhin: steht versehentlich ein echtes
+#: Token in der Vorlage, schlägt der Haken trotzdem an.
+ERLAUBTE_DATEIEN = {
+    "post_daily.conf.example",
+}
+
 #: Muster für Inhalte. Platzhalter wie "IGAA..." oder "GEHEIM" lösen bewusst
 #: nicht aus – nur Zeichenketten, die die Länge echter Geheimnisse haben.
 VERBOTENE_INHALTE = [
@@ -67,6 +76,8 @@ def main() -> int:
 
     for pfad in staged_dateien():
         name = pfad.split("/")[-1]
+        if name in ERLAUBTE_DATEIEN or pfad in ERLAUBTE_DATEIEN:
+            continue
         for muster in VERBOTENE_DATEIEN:
             if fnmatch(name, muster) or fnmatch(pfad, muster):
                 probleme.append(f"  {pfad} — gehört nicht ins Repository")

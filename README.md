@@ -27,7 +27,7 @@ cd ~/Programming/wettergeschichte
 ```
 
 Der Reihe nach: Token prüfen und bei Bedarf verlängern → Daten beim DWD
-holen → Kennzahlen ableiten → beide Beiträge bauen → Bilder in die
+holen → Kennzahlen ableiten → alle Beiträge bauen → Bilder in die
 Bildablage schieben → auf Instagram veröffentlichen.
 
 **Nicht vor 9:15 Uhr laufen lassen.** Der DWD schiebt die Daten des Vortags
@@ -59,28 +59,43 @@ dann eine halbe Stunde warten und Schritt 1 wiederholen.
 
 ### Was dabei entsteht
 
-Welche Beiträge entstehen, legt `VARIANTE` in `post_daily.conf` fest —
-mehrere durch Leerzeichen getrennt:
+Welche Beiträge entstehen, legt `VARIANTE` in `post_daily.conf` fest — mehrere
+durch Leerzeichen getrennt. Vorgabe ist
+`serie drei-tage bewoelkung regen-kumulativ`, also vier Beiträge je Lauf:
 
 | Variante | Beitrag | wie oft |
 |---|---|---|
 | `serie` | Karussell aus sechs Bildern: das Kalenderjahr, die vier jüngsten Quartale, die Legende | täglich |
 | `drei-tage` | die letzten drei Tage im Stundenverlauf, dahinter dieselben Tage der fünf Vorjahre | täglich |
-| `bewoelkung` | Bewölkungskalender des Vormonats und der fünf Vorjahre, dazu ein Streifenbild über neun Jahre | einmal im Monat |
-| `regen-kumulativ` | vier Jahre untereinander, jedes als Summenkurve gegen den Normalverlauf | nach Bedarf |
+| `bewoelkung` | Bewölkungskalender des **laufenden** Monats und der fünf Vorjahre, dazu ein Streifenbild über neun Jahre | täglich |
+| `regen-kumulativ` | vier Jahre untereinander, jedes als Summenkurve gegen den Normalverlauf | täglich |
 
-`bewoelkung` läuft täglich mit, tut aber fast immer nichts: Der Beitrag entsteht
-erst, wenn der Vormonat vollständig vorliegt, und wird übersprungen, sobald es
-ihn gibt. Einen anderen Monat nachträglich bauen und posten:
+`bewoelkung` nimmt den laufenden Monat. Das erste Bild reicht bis zum letzten Tag
+mit Daten, der Rest des Monats bleibt als gestrichelter Umriss leer; die Vorjahre
+dahinter sind immer **ganze** Monate, damit man sieht, worauf der laufende Monat
+zusteuert. Am Monatsanfang ist das ein einzelnes Kästchen — so gewollt, die
+Reihe wächst dann Tag für Tag mit. Solange der Monat läuft, nennt der
+Begleittext den Stand und verkneift sich einen Rang: ein angefangener Monat und
+ein ganzer sind nicht dasselbe.
+
+Weil täglich ein Feld dazukommt, wird der laufende Monat bei jedem Lauf neu
+gezeichnet. Ein **abgeschlossener** Monat dagegen, den es schon als Ordner gibt,
+wird übersprungen: Er ändert sich nicht mehr, und ein zweiter Lauf hieße ein
+zweiter Beitrag. `--force` hebt genau diese Sperre auf.
 
 ```bash
-./post_daily.py --variante bewoelkung --monat 2026-01            # Trockenlauf
-./post_daily.py --variante bewoelkung --monat 2026-01 --publish
+./post_daily.py --variante bewoelkung                            # laufender Monat
+./post_daily.py --variante bewoelkung --publish
+./post_daily.py --variante bewoelkung --monat 2026-01 --force --publish
 ```
 
-`--force` baut auch dann, wenn es den Ordner schon gibt. Der Beitrag kommt von
-**Station 4928**, die übrigen von 4931 — `post_daily.py` holt deshalb die Daten
-beider Stationen und gibt jeder Variante die passende mit.
+Liegt noch kein einziger Tag vor — genau am Ersten, solange der DWD den Vortag
+nachschiebt — oder fehlen bei mehr als zwei gemeldeten Tagen die Messwerte
+(`--max-fehlend`), endet das Bauskript mit Rückgabewert 3 — „nichts zu tun“,
+kein Fehler.
+
+Der Beitrag kommt von **Station 4928**, die übrigen von 4931 — `post_daily.py`
+holt deshalb die Daten beider Stationen und gibt jeder Variante die passende mit.
 
 Jeder Beitrag landet als eigener Ordner unter `posts/` mit `bild.jpg`
 (beziehungsweise `bild_1.jpg` … `bild_6.jpg`) und `text.txt`.
@@ -290,25 +305,10 @@ darunter der aufsummierte Niederschlag. Die Kennzahlen rechts sind auf den
 Stichtag des laufenden Jahres gekürzt – sonst vergleicht man ein Rumpfjahr mit
 vollen Jahren.
 
-* `plots/python/fuenf_jahre_matplotlib.py`
-* `plots/R/fuenf_jahre_ggplot2.R` (mit patchwork)
-
-### Die Fünf-Jahres-Variante mit Min/Max-Strichen
-
-Ein anderer Zugang zur selben Frage: die Tagesbalken des laufenden Jahres wie
-im NYT-Diagramm, und dahinter für jeden Kalendertag die Tagesminima und
--maxima der fünf Vorjahre als schmale waagerechte Striche, die mit zunehmendem
-Alter heller werden.
-
-Der Unterschied zur geglätteten Fassung: dort sieht man den Verlauf, hier den
-einzelnen Tag. Ob ein heißer Tag im Rahmen der letzten Jahre liegt oder aus
-ihnen herausragt, lässt sich nur so ablesen. Über ein ganzes Jahr wird es
-allerdings dicht – im Quartalsausschnitt kommt die Idee besser zur Geltung.
-
-```bash
-python plots/python/fuenf_jahre_striche_matplotlib.py --station 4931
-python plots/python/fuenf_jahre_striche_matplotlib.py --station 4931 --months 3
-```
+Geblieben ist davon nur die Hochkant-Karte `instagram_card.py --chart
+fuenf_jahre`, die diese Fassung selbst zeichnet. Die eigenständigen Varianten –
+matplotlib geglättet, matplotlib mit Min/Max-Strichen, ggplot2 mit patchwork –
+sind entfallen; im Kanal steht dafür das NYT-Diagramm.
 
 ### Beiträge für Instagram: quadratisch und ohne Text im Bild
 
@@ -380,12 +380,7 @@ Datensatz, gewählt über `--art`:
 |---|---|
 | `kumulativ` | vier Jahre untereinander, jedes als Summenkurve gegen den Normalverlauf — die Instagram-Variante |
 | `rueckstand` | dieselben Summenkurven, aber alle in einem Feld übereinander |
-| `kalender` | jeder Tag des Jahres als Kästchen, eingefärbt nach Menge |
-| `konzentration` | wieviel Prozent des Jahresniederschlags an den nassesten Tagen fielen |
-| `trockenheit` | längste Trockenperiode je Jahr |
 | `schnee` | Anteil der Winterniederschlagstage mit Schnee, über die ganze Reihe |
-| `intensitaet` | stärkste Stundenintensität je Jahr, auf Stundenwerten |
-| `streifen` | jeder Tag als Streifen, eine Zeile je Jahr |
 
 ```bash
 python plots/python/regen_matplotlib.py --art kumulativ --station 4931

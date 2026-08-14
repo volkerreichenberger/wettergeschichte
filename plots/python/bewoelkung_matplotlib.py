@@ -10,9 +10,20 @@ die Vorjahre in absteigender Folge. Alle Bilder teilen dieselbe Farbskala – si
 ist an die Achtel gebunden, nicht an den Wertebereich des jeweiligen Monats,
 und damit ohne Zutun vergleichbar.
 
-Gebaut wird einmal im Monat, sobald der Monat vollständig genug vorliegt. Sonst
-endet das Skript mit Rückgabewert 3 – ``post_daily.sh`` wertet das als
-„nichts zu tun“ und nicht als Fehler.
+Vorgabe ist der **laufende** Monat: das Kalenderblatt reicht bis zum letzten Tag,
+für den Daten vorliegen, der Rest bleibt als gestrichelter Umriss leer. Die
+Vorjahre dahinter sind immer ganze Monate – nur so sieht man, worauf der
+laufende Monat zusteuert. Der Begleittext sagt deshalb, bis wann gemessen ist,
+und verkneift sich einen Rang, solange der Monat läuft.
+
+Der Beitrag entsteht ab dem ersten gemessenen Tag – am Monatsanfang also mit
+einem einzelnen Kästchen, das dann Tag für Tag Gesellschaft bekommt. Nur wenn
+gar kein Tag vorliegt oder mehr als ``--max-fehlend`` Werte fehlen, endet das
+Skript mit Rückgabewert 3 – ``post_daily.py`` wertet das als „nichts zu tun“
+und nicht als Fehler. Ein abgeschlossener Monat,
+den es schon als Ordner gibt, wird ebenfalls übersprungen; er ändert sich nicht
+mehr, und ein zweiter Lauf hieße ein zweiter Beitrag. Der laufende Monat wird
+dagegen bei jedem Lauf neu gezeichnet, weil täglich ein Feld dazukommt.
 
 **Station:** Vorgabe ist 4928 Schnarrenberg, nicht 4931 wie im übrigen Projekt.
 An 4931 fehlt der Bedeckungsgrad von Juni 2022 bis August 2023 vollständig.
@@ -71,6 +82,13 @@ def cmap(name: str) -> LinearSegmentedColormap:
 #: Begleittext benannt.
 MAX_FEHLEND = 2
 
+#: So viele Tage muss der laufende Monat haben, bevor ein Beitrag entsteht.
+#: Eins heißt: sobald ein Tag gemessen ist, gibt es den Beitrag – am
+#: Monatsanfang also ein einzelnes Kästchen. Das ist gewollt; die Reihe wächst
+#: dann Tag für Tag mit. Null Tage bleiben der einzige Grund auszusetzen, und
+#: der tritt genau am Ersten ein, solange der DWD den Vortag noch nachschiebt.
+MIN_TAGE = 1
+
 
 def feld(spalte: int, zeile: int, farbe, stil: str, rand=None, strichelt=False):
     """Grundform einer Tageszelle: Kreis bei „gelb", sonst Quadrat."""
@@ -125,14 +143,29 @@ def monatswerte(df: pd.DataFrame, monat: str) -> pd.DataFrame:
     return sub.dropna(subset=["cloud_cover_okta"])
 
 
-def letzter_ganzer_monat(heute: date) -> str:
-    """Der Vormonat – der einzige, der überhaupt vollständig sein kann."""
-    vormonat = heute.replace(day=1) - pd.Timedelta(days=1)
-    return f"{vormonat.year:04d}-{vormonat.month:02d}"
+def aktueller_monat(heute: date) -> str:
+    return f"{heute.year:04d}-{heute.month:02d}"
+
+
+def stand_im_monat(df: pd.DataFrame, monat: str) -> int:
+    """Bis zu welchem Tag des Monats Daten vorliegen.
+
+    Maßgeblich ist der letzte Tag, an dem die Station überhaupt gemeldet hat,
+    nicht der letzte Tag mit Bedeckungsgrad: fehlt der Wert von gestern, ist das
+    eine Lücke im Monat und soll als leeres Feld sichtbar bleiben, nicht den
+    Monat stillschweigend einen Tag früher enden lassen.
+    """
+    p = pd.Period(monat, freq="M")
+    stand = df["date"].max()
+    if pd.isna(stand) or stand >= p.end_time:
+        return p.days_in_month
+    if stand < p.start_time:
+        return 0
+    return int(stand.day)
 
 
 def zeichne(sub: pd.DataFrame, monat: str, station: int, station_name: str,
-            path: Path, args) -> None:
+            path: Path, args, bis_tag: int | None = None) -> None:
     skala = cmap(args.stil)
     p = pd.Period(monat, freq="M")
     werte = dict(zip(sub["date"].dt.day, sub["cloud_cover_okta"]))
@@ -174,7 +207,13 @@ def zeichne(sub: pd.DataFrame, monat: str, station: int, station_name: str,
 
     fig.text(0.07, 0.955, f"Bewölkung {wg.MONTH_NAMES_LONG[p.month - 1]} {p.year}",
              fontsize=27, fontweight="bold", va="top")
-    fig.text(0.07, 0.895, f"Stuttgart · Monatsmittel "
+    if not bis_tag:
+        zeitraum = "Monatsmittel"
+    else:
+        # Am ersten Tag wäre "1.–1." albern.
+        zeitraum = (f"nur der 1. · Mittel" if bis_tag == 1
+                    else f"1.–{bis_tag}. · Mittel")
+    fig.text(0.07, 0.895, f"Stuttgart · {zeitraum} "
                           f"{wg.de_num(sub['cloud_cover_okta'].mean())} Achtel",
              fontsize=14, color=wg.TEXT_MUTED, va="top")
 
@@ -209,11 +248,13 @@ def monatsreihe(df: pd.DataFrame, monat_nr: int) -> pd.Series:
 
 
 def zeichne_streifen(df: pd.DataFrame, monat_nr: int, jahre_wunsch, path: Path,
-                     args) -> None:
+                     args, laufendes_jahr: int) -> None:
     """Je Jahr eine flache Zeile, ein Streifen je Tag – neuestes Jahr oben.
 
     Das ist der lange Blick: dieselbe Farbskala wie in den Kalenderblättern,
-    aber alle gemessenen Jahre übereinander statt sechs nebeneinander.
+    aber alle gemessenen Jahre übereinander statt sechs nebeneinander. Die
+    Vorjahre stehen immer als ganze Monate da; nur die oberste Zeile hört auf,
+    wo die Daten des laufenden Monats aufhören.
     """
     skala = cmap(args.stil)
     name = wg.MONTH_NAMES_LONG[monat_nr - 1]
@@ -221,8 +262,11 @@ def zeichne_streifen(df: pd.DataFrame, monat_nr: int, jahre_wunsch, path: Path,
     sub = df[df["date"].dt.month == monat_nr].dropna(subset=["cloud_cover_okta"])
     sub = sub.assign(jahr=sub["date"].dt.year, tag=sub["date"].dt.day)
     tage_je_jahr = sub.groupby("jahr")["tag"].count()
-    jahre = sorted((j for j in tage_je_jahr[tage_je_jahr >= MIN_TAGE_STREIFEN].index
-                    if j in jahre_wunsch), reverse=True)
+    # Das laufende Jahr darf die Mindestzahl unterschreiten – es ist ja der
+    # Anlass des Beitrags. Für die Vorjahre bleibt die Schwelle streng.
+    genug = tage_je_jahr[(tage_je_jahr >= MIN_TAGE_STREIFEN)
+                         | (tage_je_jahr.index == laufendes_jahr)]
+    jahre = sorted((j for j in genug.index if j in jahre_wunsch), reverse=True)
     tage_im_monat = 31 if monat_nr in (1, 3, 5, 7, 8, 10, 12) else 30
 
     plt.rcParams.update({**wg.rc_font(),
@@ -288,26 +332,55 @@ def zeichne_streifen(df: pd.DataFrame, monat_nr: int, jahre_wunsch, path: Path,
 
 
 def caption(panels, monat: str, station: int, station_name: str,
-            reihe: pd.Series | None = None) -> str:
-    """panels: Liste (monat, DataFrame) – das laufende Jahr zuerst."""
+            reihe: pd.Series | None = None, bis_tag: int | None = None) -> str:
+    """panels: Liste (monat, DataFrame) – das laufende Jahr zuerst.
+
+    ``bis_tag`` gesetzt heißt: der Monat läuft noch und reicht nur bis dahin.
+    Die Vorjahre sind ganze Monate, der Vergleich also vorläufig – das muss im
+    Text stehen, sonst liest sich ein heiterer halber Monat als heiterer Monat.
+    """
     p = pd.Period(monat, freq="M")
     name = wg.MONTH_NAMES_LONG[p.month - 1]
     aktuell = panels[0][1]["cloud_cover_okta"]
+    laufend = bis_tag is not None
 
     zeilen = []
     luecken = []
-    for m, sub in panels:
+    for i, (m, sub) in enumerate(panels):
         jahr = pd.Period(m, freq="M").year
         okta = sub["cloud_cover_okta"]
-        fehlt = pd.Period(m, freq="M").days_in_month - len(sub)
-        zeilen.append(f"· {jahr}: {wg.de_num(okta.mean())} Achtel im Mittel, "
+        # Für den laufenden Monat zählt nur, was bis zum Datenstand fehlt.
+        soll = bis_tag if (i == 0 and laufend) else pd.Period(m, freq="M").days_in_month
+        fehlt = soll - len(sub)
+        bis = ("" if not (i == 0 and laufend)
+               else " (nur der 1.)" if bis_tag == 1 else f" (1.–{bis_tag}.)")
+        zeilen.append(f"· {jahr}{bis}: {wg.de_num(okta.mean())} Achtel im Mittel, "
                       f"{int((okta <= 2).sum())} heitere und "
                       f"{int((okta >= 6).sum())} trübe Tage")
-        if fehlt:
+        if fehlt > 0:
             luecken.append(f"{jahr} ({fehlt} {'Tag' if fehlt == 1 else 'Tage'})")
 
     mittel = [sub["cloud_cover_okta"].mean() for _, sub in panels]
     rang = sum(1 for m in mittel[1:] if m < mittel[0]) + 1
+
+    # Am 1. gäbe „reicht bis zum 1." und „1.–1." beides Unsinn.
+    einzeln = laufend and bis_tag == 1
+    reicht = "zeigt bisher nur den 1." if einzeln else f"reicht bis zum {bis_tag}."
+    zeitraum = "nur am 1." if einzeln else f"bis zum {bis_tag}."
+    stand = (f"Der {name} {p.year} läuft noch: das erste Bild {reicht} Die "
+             f"übrigen Tage sind leer. Die Vorjahre dahinter stehen als ganze "
+             f"Monate da.\n\n") if laufend else ""
+
+    vergleich = (
+        f"{name} {p.year} {zeitraum}: {wg.de_num(aktuell.mean())} Achtel "
+        f"im Mittel. Ein Rang lässt sich daraus noch nicht ablesen – ein "
+        f"angefangener Monat und ein ganzer sind nicht dasselbe.\n\n"
+        if laufend else
+        f"{name} {p.year}: {wg.de_num(aktuell.mean())} Achtel im Mittel — "
+        f"Platz {rang} von {len(panels)}, "
+        f"{'der klarste' if rang == 1 else 'der ' + str(rang) + '. klarste'} "
+        f"dieser {len(panels)} Jahre.\n\n"
+    )
 
     text = (
         f"Bewölkung im {name} – {p.year} und die {len(panels) - 1} Jahre davor\n\n"
@@ -315,12 +388,10 @@ def caption(panels, monat: str, station: int, station_name: str,
         f"Je blauer, desto klarer der Himmel; je grauer, desto bedeckter. "
         f"Alle Bilder teilen dieselbe Farbskala und sind damit unmittelbar "
         f"vergleichbar – zum Blättern nach rechts wischen.\n\n"
+        + stand +
         f"Gemessen wird der Bedeckungsgrad in Achteln: 0 heißt wolkenlos, "
         f"8 geschlossene Wolkendecke. Der Wert im Bild ist das Tagesmittel.\n\n"
-        f"{name} {p.year}: {wg.de_num(aktuell.mean())} Achtel im Mittel — "
-        f"Platz {rang} von {len(panels)}, "
-        f"{'der klarste' if rang == 1 else 'der ' + str(rang) + '. klarste'} "
-        f"dieser {len(panels)} Jahre.\n\n"
+        + vergleich
         + "\n".join(zeilen)
     )
     if luecken:
@@ -329,14 +400,24 @@ def caption(panels, monat: str, station: int, station_name: str,
 
     if reihe is not None:
         gueltig = reihe.dropna()
-        rang = int((gueltig < gueltig.loc[p.year]).sum()) + 1
+        # Der laufende Monat steht noch nicht in der Reihe – sie verlangt 25
+        # gemessene Tage. Dann wird eingeordnet, was abgeschlossen ist.
+        if p.year in gueltig.index:
+            rang = int((gueltig < gueltig.loc[p.year]).sum()) + 1
+            einordnung = (
+                f"{name} {p.year} war mit {wg.de_num(gueltig.loc[p.year])} Achteln "
+                f"der {rang}. klarste von {len(gueltig)} gemessenen. ")
+        else:
+            einordnung = (
+                f"Der {name} {p.year} fehlt dort noch – er wird erst gewertet, "
+                f"wenn der Monat durch ist. ")
         text += (
             f"\n\nDas letzte Bild fasst alles zusammen: ein Streifen je Jahr, "
             f"jeder {name} seit {int(gueltig.index.min())}. "
-            f"{name} {p.year} war mit {wg.de_num(gueltig.loc[p.year])} Achteln der "
-            f"{rang}. klarste von {len(gueltig)} gemessenen. Am klarsten war "
-            f"{int(gueltig.idxmin())} mit {wg.de_num(gueltig.min())}, am trübsten "
-            f"{int(gueltig.idxmax())} mit {wg.de_num(gueltig.max())} Achteln."
+            + einordnung +
+            f"Am klarsten war {int(gueltig.idxmin())} mit "
+            f"{wg.de_num(gueltig.min())}, am trübsten {int(gueltig.idxmax())} mit "
+            f"{wg.de_num(gueltig.max())} Achteln."
         )
     text += (
         f"\n\nDiese Reihe kommt von der Station {station} {station_name} — "
@@ -352,7 +433,7 @@ def main(argv=None) -> int:
     ap = wg.cli(__doc__)
     ap.set_defaults(format="jpg", station=STATION_BEWOELKUNG)
     ap.add_argument("--monat", metavar="JJJJ-MM",
-                    help="welcher Monat; Vorgabe ist der letzte abgeschlossene")
+                    help="welcher Monat; Vorgabe ist der laufende")
     ap.add_argument("--jahre", type=int, default=5, help="Anzahl der Vorjahre dahinter")
     ap.add_argument("--streifen-mehr", type=int, default=3,
                     help="so viele Jahre reicht das Streifenbild weiter zurück "
@@ -360,7 +441,9 @@ def main(argv=None) -> int:
     ap.add_argument("--stil", choices=list(SKALEN), default="sonne",
                     help="blau = Quadrate, gelb = Kreise, sonne = Himmel mit Sonne")
     ap.add_argument("--max-fehlend", type=int, default=MAX_FEHLEND,
-                    help="so viele Tage dürfen im laufenden Monat fehlen")
+                    help="so viele der gemeldeten Tage dürfen ohne Messwert sein")
+    ap.add_argument("--min-tage", type=int, default=MIN_TAGE,
+                    help="so viele Tage muss der Monat mindestens haben")
     ap.add_argument("--data-dir", type=Path, default=wg.ROOT / "data")
     ap.add_argument("--posts", type=Path, default=wg.POSTS)
     ap.add_argument("--jpeg-quality", type=int, default=92)
@@ -368,22 +451,33 @@ def main(argv=None) -> int:
                     help="auch bauen, wenn der Ordner schon da ist")
     args = ap.parse_args(argv)
 
-    monat = args.monat or letzter_ganzer_monat(date.today())
+    monat = args.monat or aktueller_monat(date.today())
     p = pd.Period(monat, freq="M")
     slug = f"bewoelkung_{args.station:05d}_{monat}"
 
-    if (args.posts / slug).exists() and not args.force:
-        print(f"{slug} gibt es schon – nichts zu tun.")
+    df = lade(args.data_dir, args.station)
+    bis_tag = stand_im_monat(df, monat)
+    laufend = bis_tag < p.days_in_month
+
+    # Ein abgeschlossener Monat ändert sich nicht mehr; ihn ein zweites Mal zu
+    # bauen hieße, denselben Beitrag ein zweites Mal zu veröffentlichen. Der
+    # laufende Monat dagegen wächst jeden Tag und wird deshalb neu gezeichnet.
+    if not laufend and (args.posts / slug).exists() and not args.force:
+        print(f"{slug} gibt es schon und {monat} ist abgeschlossen – nichts zu tun.")
         return NICHTS_ZU_TUN
 
-    df = lade(args.data_dir, args.station)
+    if bis_tag < args.min_tage:
+        print(f"{monat}: erst {bis_tag} Tag(e) gemessen, mindestens "
+              f"{args.min_tage} sollen es sein – noch nichts zu tun.")
+        return NICHTS_ZU_TUN
+
     sub = monatswerte(df, monat)
-    fehlend = p.days_in_month - len(sub)
+    fehlend = bis_tag - len(sub)
     if fehlend > args.max_fehlend:
-        fehlende_tage = set(range(1, p.days_in_month + 1)) - set(sub["date"].dt.day)
-        print(f"{monat}: {fehlend} von {p.days_in_month} Tagen ohne Bedeckungsgrad "
-              f"({', '.join(str(t) + '.' for t in sorted(fehlende_tage))}) – "
-              f"noch nichts zu tun.")
+        fehlende_tage = set(range(1, bis_tag + 1)) - set(sub["date"].dt.day)
+        print(f"{monat}: {fehlend} von {bis_tag} gemeldeten Tagen ohne "
+              f"Bedeckungsgrad ({', '.join(str(t) + '.' for t in sorted(fehlende_tage))}) "
+              f"– noch nichts zu tun.")
         return NICHTS_ZU_TUN
 
     # Das laufende Jahr zuerst, dann rückwärts. Jahre ohne jeden Messwert
@@ -404,7 +498,8 @@ def main(argv=None) -> int:
 
     for i, (m, s) in enumerate(panels, start=1):
         bild = out / f"bild_{i}.{args.format}"
-        zeichne(s, m, args.station, station_name, bild, args)
+        zeichne(s, m, args.station, station_name, bild, args,
+                bis_tag if (i == 1 and laufend) else None)
         print(f"geschrieben: {bild}  ({m})")
 
     reihe = monatsreihe(df, p.month)
@@ -413,11 +508,12 @@ def main(argv=None) -> int:
     # der lange Blick, und ein paar Zeilen mehr kosten dort keinen Platz.
     zurueck = args.jahre + args.streifen_mehr
     jahre_streifen = {p.year - k for k in range(zurueck + 1)}
-    zeichne_streifen(df, p.month, jahre_streifen, streifen, args)
+    zeichne_streifen(df, p.month, jahre_streifen, streifen, args, p.year)
     print(f"geschrieben: {streifen}  (Streifen über alle Jahre)")
 
     text = out / "text.txt"
-    text.write_text(caption(panels, monat, args.station, station_name, reihe),
+    text.write_text(caption(panels, monat, args.station, station_name, reihe,
+                            bis_tag if laufend else None),
                     encoding="utf-8")
     print(f"geschrieben: {text}")
     print(f"POST_DIR={out}")
