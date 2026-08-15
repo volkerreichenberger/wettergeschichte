@@ -224,14 +224,16 @@ nicht, bricht es vor dem Veröffentlichen ab, statt bei Instagram einen
 fehlerhaften Container anzulegen.
 
 ```cron
-# jeden Morgen um 8:15
-15 8 * * *  cd ~/Programming/wettergeschichte && ./post_daily.py --publish >> log/post.log 2>&1
+# jeden Morgen um 11 Uhr – der DWD liefert die Vortagsdaten gegen 9 Uhr
+0 11 * * *  cd ~/Programming/wettergeschichte && ./post_daily.py --publish >> log/post.log 2>&1
 ```
 
 Zwei Dinge dabei beachten:
 
-* Das Zugriffstoken läuft nach 60 Tagen ab. Entweder rechtzeitig verlängern
-  (`GET /refresh_access_token`) oder in den Kalender schreiben.
+* Das Zugriffstoken läuft nach 60 Tagen ab. `post_daily.py` verlängert es
+  selbsttätig, sobald weniger als 14 Tage Restlaufzeit bleiben, und schreibt
+  das neue in `post_daily.conf` zurück — die Datei muss für den cron-Benutzer
+  also schreibbar sein.
 * Der DWD aktualisiert die `recent`-Dateien morgens; `fetch_dwd.py` erkennt am
   `Last-Modified`, ob sich überhaupt etwas geändert hat.
 

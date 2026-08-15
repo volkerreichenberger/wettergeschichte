@@ -31,10 +31,10 @@ holen → Kennzahlen ableiten → alle Beiträge bauen → Bilder in die
 Bildablage schieben → auf Instagram veröffentlichen.
 
 **Nicht vor 10 Uhr laufen lassen.** Der DWD schiebt die Daten des Vortags
-morgens gegen 8:40 bis 9:00 Uhr nach; die Stunde Abstand fängt einen
-verspäteten Nachschub ab. Wer früher startet, baut den Beitrag mit
+morgens gegen 8:40 bis 9:00 Uhr nach. Wer früher startet, baut den Beitrag mit
 vorgestrigen Zahlen — das Skript merkt das nicht, weil es keine Lücke gibt,
-sondern nur einen Tag weniger.
+sondern nur einen Tag weniger. Die Beispiele hier nehmen 11 Uhr; das lässt
+Luft für einen verspäteten Nachschub.
 
 ### Wenn du es Schritt für Schritt willst
 
@@ -127,7 +127,7 @@ python3 instagram_post.py --caption-file $POST/text.txt \
 Automatisch täglich:
 
 ```cron
-0 10 * * *  cd ~/Programming/wettergeschichte && ./post_daily.py --publish >> log/post.log 2>&1
+0 11 * * *  cd ~/Programming/wettergeschichte && ./post_daily.py --publish >> log/post.log 2>&1
 ```
 
 Auf einem Server mit virtueller Umgebung sieht die Zeile anders aus, und es
@@ -301,13 +301,16 @@ auch nach der Umstellung noch einmal laufen.
 
 ### Täglich laufen lassen
 
+`BENUTZER` unten durch den eigenen Kontonamen ersetzen — `pwd` im
+Projektverzeichnis zeigt den vollen Pfad.
+
 ```bash
 mkdir -p ~/wettergeschichte/log     # log/ ist nicht im Repository
 crontab -e
 ```
 
 ```cron
-0 10 * * *  cd /home/nxtstep/wettergeschichte && .venv/bin/python3 post_daily.py --publish >> log/post.log 2>&1
+0 11 * * *  cd /home/BENUTZER/wettergeschichte && .venv/bin/python3 post_daily.py --publish >> log/post.log 2>&1
 ```
 
 Fünf Dinge, an denen cron-Einträge scheitern:
@@ -317,9 +320,9 @@ Fünf Dinge, an denen cron-Einträge scheitern:
   `.venv/bin/python3` — sonst nimmt er das System-Python ohne pandas.
 * **Uhrzeit in der Zeitzone des Servers**, nicht in Deiner — `timedatectl`
   zeigt sie. Der DWD liefert die Vortagsdaten gegen 8:40–9:00 Uhr deutscher
-  Zeit. Auf `Europe/Berlin` passt `0 10`, und die Umstellung zwischen Sommer-
+  Zeit. Auf `Europe/Berlin` passt `0 11`, und die Umstellung zwischen Sommer-
   und Winterzeit erledigt cron mit. Auf UTC müsste die Zeile zweimal im Jahr
-  gewechselt werden (`0 8` beziehungsweise `0 9`); einfacher ist
+  gewechselt werden (`0 9` beziehungsweise `0 10`); einfacher ist
   `sudo timedatectl set-timezone Europe/Berlin`.
 * **Geht die Uhr richtig?** `timedatectl` zeigt es als
   `System clock synchronized`. Steht dort `no`, läuft die Uhr womöglich weg,
@@ -333,7 +336,7 @@ Fünf Dinge, an denen cron-Einträge scheitern:
   benutzt:
 
   ```bash
-  WG=/home/nxtstep/wettergeschichte
+  WG=/home/BENUTZER/wettergeschichte
   env -i HOME=$HOME sh -c "cd $WG && .venv/bin/python3 post_daily.py --skip-fetch"
   env -i HOME=$HOME sh -c "cd $WG && .venv/bin/python3 post_daily.py --upload-only"
   ```

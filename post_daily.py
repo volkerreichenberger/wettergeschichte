@@ -13,7 +13,7 @@ prüfen, bevor Zugangsdaten im Spiel sind.
 
 Für cron eignet sich das genauso wie ein Shell-Skript:
 
-    15 9 * * *  cd ~/Programming/wettergeschichte && ./post_daily.py --publish
+    0 11 * * *  cd ~/Programming/wettergeschichte && ./post_daily.py --publish
 
 Rückgabewert 0, wenn alles lief; 1, wenn mindestens eine Variante scheiterte.
 """
