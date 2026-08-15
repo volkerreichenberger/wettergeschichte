@@ -129,6 +129,9 @@ Automatisch täglich:
 15 9 * * *  cd ~/Programming/wettergeschichte && ./post_daily.py --publish >> log/post.log 2>&1
 ```
 
+Auf einem Server mit virtueller Umgebung sieht die Zeile anders aus, und es
+gibt ein paar Fallstricke — siehe [Täglich laufen lassen](#täglich-laufen-lassen).
+
 ---
 
 ## Was nie ins Repository darf
@@ -210,10 +213,6 @@ oder gleich den vollen Pfad nehmen. Die Unterprozesse erben die Umgebung, weil
 ~/wettergeschichte/.venv/bin/python3 post_daily.py --skip-fetch
 ```
 
-```cron
-15 9 * * *  cd ~/wettergeschichte && .venv/bin/python3 post_daily.py --publish >> log/post.log 2>&1
-```
-
 ### Die Schrift
 
 Die Beiträge sind schmal gesetzt: erste Wahl Myriad Pro, Ersatz **Fira Sans**.
@@ -279,6 +278,65 @@ git -C ~/wettergeschichtebilder push
 Das `ssh -T` ist kein Zierrat: Ohne den Eintrag in `~/.ssh/known_hosts` bleibt
 der cron-Lauf später an der Fingerabdruck-Frage hängen, und niemand ist da, der
 antwortet.
+
+**Wenn Port 22 gesperrt ist** — in Server-Netzen die Regel, erkennbar an
+`ssh: connect to host github.com port 22: Connection refused` — bietet GitHub
+dieselbe Verbindung auf Port 443 an. Im Block oben dann zwei Zeilen ändern:
+
+```
+Host github-bilder
+  HostName ssh.github.com
+  Port 443
+  User git
+  IdentityFile ~/.ssh/id_wettergeschichtebilder
+  IdentitiesOnly yes
+```
+
+Nicht einen zweiten `Host github-bilder`-Block anhängen: SSH nimmt bei
+doppelten Einträgen den **ersten** Wert je Schlüsselwort, der alte gewönne
+also. Der Fingerabdruck landet danach als `[ssh.github.com]:443` in
+`known_hosts` — ein eigener Eintrag, deshalb muss `ssh -T git@github-bilder`
+auch nach der Umstellung noch einmal laufen.
+
+### Täglich laufen lassen
+
+```bash
+mkdir -p ~/wettergeschichte/log     # log/ ist nicht im Repository
+crontab -e
+```
+
+```cron
+15 9 * * *  cd /home/nxtstep/wettergeschichte && .venv/bin/python3 post_daily.py --publish >> log/post.log 2>&1
+```
+
+Vier Dinge, an denen cron-Einträge scheitern:
+
+* **Absoluter Pfad.** cron führt die Zeile mit `/bin/sh` aus, und deren `PATH`
+  ist kurz. `~` durch den vollen Pfad ersetzen, `python3` durch
+  `.venv/bin/python3` — sonst nimmt er das System-Python ohne pandas.
+* **Uhrzeit in der Zeitzone des Servers**, nicht in Deiner. `timedatectl`
+  zeigt sie. Der DWD liefert die Vortagsdaten gegen 8:40–9:00 Uhr MEZ/MESZ;
+  steht der Server auf UTC, muss die Zeile im Sommer auf `15 7` stehen.
+* **Ausgabe umleiten.** Ohne `>> log/post.log 2>&1` verschickt cron sie per
+  Mail, und ohne Mailsystem ist sie schlicht weg — auch die Fehlermeldungen.
+* **Erst von Hand prüfen**, und zwar mit derselben leeren Umgebung, die cron
+  benutzt:
+
+  ```bash
+  WG=/home/nxtstep/wettergeschichte
+  env -i HOME=$HOME sh -c "cd $WG && .venv/bin/python3 post_daily.py --skip-fetch"
+  env -i HOME=$HOME sh -c "cd $WG && .venv/bin/python3 post_daily.py --upload-only"
+  ```
+
+  Der erste Aufruf prüft das Bauen, der zweite zusätzlich den Push in die
+  Bildablage — den Teil, der ohne `known_hosts`-Eintrag hängen bleibt.
+  `--upload-only` legt die Bilder ab und veröffentlicht nichts. Laufen beide
+  durch, läuft auch cron.
+
+Das Zugriffstoken verlängert `post_daily.py` selbsttätig, sobald weniger als
+14 Tage Restlaufzeit bleiben — dafür ist kein eigener Eintrag nötig. Es
+schreibt das neue Token in `post_daily.conf` zurück, die Datei muss für den
+cron-Benutzer also schreibbar sein.
 
 ### Daten und Kennzahlen
 
