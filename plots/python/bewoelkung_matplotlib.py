@@ -165,7 +165,13 @@ def stand_im_monat(df: pd.DataFrame, monat: str) -> int:
 
 
 def zeichne(sub: pd.DataFrame, monat: str, station: int, station_name: str,
-            path: Path, args, bis_tag: int | None = None) -> None:
+            path: Path, args) -> None:
+    """Ein Kalenderblatt, nur Titel und Raster.
+
+    Bis wann der laufende Monat reicht, steht nicht im Bild: Es sagen schon
+    die leeren Felder, und eine zweite Zeile unter der Ueberschrift lief in
+    schmalen Schriften mit dem Titel zusammen.
+    """
     skala = cmap(args.stil)
     p = pd.Period(monat, freq="M")
     werte = dict(zip(sub["date"].dt.day, sub["cloud_cover_okta"]))
@@ -207,15 +213,6 @@ def zeichne(sub: pd.DataFrame, monat: str, station: int, station_name: str,
 
     fig.text(0.07, 0.955, f"Bewölkung {wg.MONTH_NAMES_LONG[p.month - 1]} {p.year}",
              fontsize=27, fontweight="bold", va="top")
-    if not bis_tag:
-        zeitraum = "Monatsmittel"
-    else:
-        # Am ersten Tag wäre "1.–1." albern.
-        zeitraum = (f"nur der 1. · Mittel" if bis_tag == 1
-                    else f"1.–{bis_tag}. · Mittel")
-    fig.text(0.07, 0.895, f"Stuttgart · {zeitraum} "
-                          f"{wg.de_num(sub['cloud_cover_okta'].mean())} Achtel",
-             fontsize=14, color=wg.TEXT_MUTED, va="top")
 
     bar = fig.add_axes((0.07, 0.085, 0.50, 0.028))
     bar.imshow([[i / 100 for i in range(101)]], aspect="auto", cmap=skala)
@@ -307,7 +304,7 @@ def zeichne_streifen(df: pd.DataFrame, monat_nr: int, jahre_wunsch, path: Path,
 
     fig.text(0.07, 0.955, f"{name} {jahre[-1]} bis {jahre[0]}",
              fontsize=27, fontweight="bold", va="top")
-    fig.text(0.07, 0.895,
+    fig.text(0.07, 0.876,
              "Stuttgart · eine Zeile je Jahr, ein Streifen je Tag",
              fontsize=14, color=wg.TEXT_MUTED, va="top")
 
@@ -498,8 +495,7 @@ def main(argv=None) -> int:
 
     for i, (m, s) in enumerate(panels, start=1):
         bild = out / f"bild_{i}.{args.format}"
-        zeichne(s, m, args.station, station_name, bild, args,
-                bis_tag if (i == 1 and laufend) else None)
+        zeichne(s, m, args.station, station_name, bild, args)
         print(f"geschrieben: {bild}  ({m})")
 
     reihe = monatsreihe(df, p.month)

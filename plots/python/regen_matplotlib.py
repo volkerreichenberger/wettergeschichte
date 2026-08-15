@@ -73,11 +73,19 @@ def doy_ohne_schalttag(datum: pd.Series) -> pd.Series:
     return doy.where(~schalt, doy - 1)
 
 
-def normalkurve(derived: Path, station: int) -> pd.Series | None:
-    """Kumulierter Normalniederschlag aus der Klimatologie, falls vorhanden."""
+def normalkurve(derived: Path, station: int) -> pd.Series:
+    """Kumulierter Normalniederschlag aus der Klimatologie.
+
+    Fehlt die Datei, bricht das Skript ab, statt eine Kurve ohne Vergleich zu
+    zeichnen. Ein Bild, dem stillschweigend die gestrichelte Linie fehlt, ist
+    schlimmer als gar keins: Es sieht fertig aus, und die Aussage – wieviel
+    Regen fehlt – ist genau die, die dann nicht mehr drinsteht.
+    """
     path = derived / f"climatology_{station:05d}.csv"
     if not path.exists():
-        return None
+        raise SystemExit(
+            f"{path} fehlt – ohne sie gäbe es keinen Normalverlauf im Bild.\n"
+            f"  python3 climatology.py --stations {station} --year <Jahr>")
     clim = pd.read_csv(path, usecols=["doy", "normal_precip"])
     return clim.set_index("doy")["normal_precip"].cumsum()
 
@@ -118,12 +126,11 @@ def rueckstand(df, args, name):
     ax = fig.add_axes((0.115, 0.20, 0.845, 0.62))
 
     normal = normalkurve(args.derived, args.station)
-    if normal is not None:
-        ax.plot(normal.index, normal.values, color=wg.TEXT_MUTED, lw=1.6,
-                ls=(0, (5, 3)), zorder=3)
-        ax.annotate("Normal 1991–2020", xy=(300, normal.loc[300]), xytext=(-8, 14),
-                    textcoords="offset points", fontsize=11.5, color=wg.TEXT_MUTED,
-                    ha="right")
+    ax.plot(normal.index, normal.values, color=wg.TEXT_MUTED, lw=1.6,
+            ls=(0, (5, 3)), zorder=11)
+    ax.annotate("Normal 1991–2020", xy=(300, normal.loc[300]), xytext=(-8, 14),
+                textcoords="offset points", fontsize=11.5, color=wg.TEXT_MUTED,
+                ha="right")
 
     for jahr in jahre[:-1]:
         sub = df[df["jahr"] == jahr].sort_values("date")
@@ -147,17 +154,13 @@ def rueckstand(df, args, name):
     aufraeumen(ax)
 
     stand = int(summe.iloc[-1])
-    soll = int(normal.loc[min(len(sub), 366)]) if normal is not None else None
-    text = f"Stand {stand} mm"
-    if soll:
-        text += f", normal wären {soll} mm ({stand - soll:+d} mm)"
+    soll = int(normal.loc[min(len(sub), 365)])
+    text = f"Stand {stand} mm, normal wären {soll} mm ({stand - soll:+d} mm)"
     fig.text(0.07, 0.115, text, fontsize=14, va="top")
     return fig, kennzahl_rueckstand(stand, soll, aktuell, name)
 
 
 def kennzahl_rueckstand(stand, soll, jahr, name):
-    if soll is None:
-        return f"{jahr} sind bisher {stand} mm gefallen."
     d = stand - soll
     wie = "mehr als" if d > 0 else "weniger als"
     return (f"{jahr} sind bisher {stand} mm gefallen, {abs(d)} mm {wie} normal "
@@ -235,18 +238,16 @@ def kumulativ(df, args, name):
         kurven[jahr] = pd.Series(sub["precip_mm"].cumsum().values,
                                  index=doy_ohne_schalttag(sub["date"]).values)
 
-    oben = max(k.max() for k in kurven.values())
-    if normal is not None:
-        oben = max(oben, float(normal.max()))
-    oben *= 1.08
+    oben = max(max(k.max() for k in kurven.values()), float(normal.max())) * 1.08
 
     fig = figur(f"Niederschlag {name}", "")
 
     for i, jahr in enumerate(jahre):
         ax = fig.add_axes((0.135, 0.663 - i * 0.178, 0.825, 0.138))
-        if normal is not None:
-            ax.plot(normal.index, normal.values, color=wg.TEXT_MUTED, lw=1.3,
-                    ls=(0, (5, 3)), zorder=3)
+        # Ueber der blauen Kurve, nicht darunter: wo beide fast gleich laufen,
+        # verschwaende die duenne gestrichelte Linie sonst hinter der dicken.
+        ax.plot(normal.index, normal.values, color=wg.TEXT_MUTED, lw=1.3,
+                ls=(0, (5, 3)), zorder=5)
         kurve = kurven[jahr]
         ax.fill_between(kurve.index, 0, kurve.values, color=BLAU, alpha=0.14, zorder=2)
         ax.plot(kurve.index, kurve.values, color=BLAU, lw=2.4,
@@ -271,12 +272,11 @@ def kumulativ(df, args, name):
     for i, jahr in enumerate(jahre):
         kurve = kurven[jahr]
         ende = int(kurve.iloc[-1])
-        soll = int(normal.loc[int(kurve.index[-1])]) if normal is not None else None
+        soll = int(normal.loc[int(kurve.index[-1])])
         # Das laufende Jahr steht mit einem Teiljahr in der Liste – das muss dran.
         bis = f" (bis {voll[voll['jahr'] == jahr]['date'].max():%d.%m.})" if i == 0 else ""
-        zeilen.append(f"· {jahr}{bis}: {ende} mm"
-                      + (f", {abs(ende - soll)} mm "
-                         f"{'über' if ende > soll else 'unter'} normal" if soll else ""))
+        zeilen.append(f"· {jahr}{bis}: {ende} mm, {abs(ende - soll)} mm "
+                      f"{'über' if ende > soll else 'unter'} normal")
     laufend = jahre[0]
     return fig, (
         f"Der Niederschlag jedes Jahres, Tag für Tag aufsummiert. Die "
