@@ -168,6 +168,51 @@ Historie umzuschreiben hilft nicht, weil das Token in der Zwischenzeit
 
 ---
 
+## Auf einem neuen Rechner einrichten
+
+```bash
+git clone https://github.com/volkerreichenberger/wettergeschichte.git
+git clone https://github.com/volkerreichenberger/wettergeschichtebilder.git
+cd wettergeschichte
+git config core.hooksPath hooks          # Sperre gegen Zugangsdaten im Repo
+pip install -r requirements.txt
+cp /pfad/vom/alten/rechner/post_daily.conf .   # oder aus der Vorlage bauen
+chmod 600 post_daily.conf
+python3 check_setup.py
+```
+
+`check_setup.py` prüft, was der tägliche Ablauf braucht, und ändert nichts.
+Es unterscheidet **FEHLT** (läuft so nicht) von **Hinweis** (läuft, betrifft
+aber das Aussehen oder eine Nebenvariante). Mit `--alles` kommen die
+Vergleichsvarianten dazu (plotnine, plotly, R), mit `--keine-netzpruefung`
+bleibt es offline.
+
+Drei Dinge, die beim Umzug erfahrungsgemäß fehlen:
+
+**Die Schrift.** Die Beiträge sind schmal gesetzt: erste Wahl Myriad Pro,
+Ersatz **Fira Sans**. Fehlt beides, nimmt matplotlib klaglos DejaVu Sans — die
+Bilder entstehen, sehen aber anders aus als alles bisher Veröffentlichte, und
+das fällt erst auf Instagram auf. Deshalb prüft `check_setup.py` das eigens.
+
+```bash
+# Debian/Ubuntu – Paketname je nach Version, sonst von fonts.google.com
+apt search fira
+# Alternativ von Hand:
+mkdir -p ~/.local/share/fonts && cp FiraSans*.ttf ~/.local/share/fonts/
+fc-cache -f && rm -rf ~/.cache/matplotlib
+```
+
+**`BILDER` in `post_daily.conf`.** Der Pfad zur Bildablage steht dort absolut
+und zeigt nach dem Kopieren noch auf den alten Rechner. Auf den neuen Pfad
+setzen, sonst schlägt der Upload fehl.
+
+**Push-Zugang zur Bildablage.** `post_daily.py` committet und pusht in
+`wettergeschichtebilder`. Ohne hinterlegte Zugangsdaten bleibt der Lauf dort
+stehen. Einmal von Hand `git -C <BILDER> push` testen.
+
+Die Rohdaten liegen nicht im Repository — der erste Lauf holt sie beim DWD
+(ein paar hundert MB, einige Minuten).
+
 ## Alles neu zeichnen, zum Vergleichen
 
 Neben den Instagram-Beiträgen gibt es die Werkstatt: `run_all.py` baut jede
@@ -188,6 +233,7 @@ läuft weiter.
 
 ```
 post_daily.py       der tägliche Ablauf, siehe oben
+check_setup.py      prüft, ob auf diesem Rechner alles da ist
 post_daily.conf     Station, Varianten, Bildablage, Zugangsdaten (nicht im Repo)
 fetch_dwd.py        holt die DWD-Tageswerte, inkrementell
 fetch_hourly.py     holt die Stundenwerte (Temperatur, Niederschlag)

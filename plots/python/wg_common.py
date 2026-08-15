@@ -77,8 +77,19 @@ def quelle(station_id: int, amtlich: str, stand: str) -> str:
 # Schrift
 # --------------------------------------------------------------------------- #
 
-#: Erste Wahl ist Myriad Pro; die Übrigen springen ein, wo sie nicht liegt.
-FONT_FAMILY = ["Myriad Pro", "Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"]
+#: Schriften, mit denen die Beiträge so aussehen sollen, wie sie gedacht sind.
+#: Myriad Pro liegt auf dem Mac; Fira Sans ist der Ersatz auf Linux, weil sie
+#: als eine der wenigen frei verfügbaren Groteske einen echten schmalen
+#: Schnitt mitbringt. „Fira Sans Condensed" steht zuerst, weil manche
+#: Installationen sie als eigene Familie führen statt als Schnitt von „Fira
+#: Sans" – dann greift ``font.stretch`` allein nicht.
+FONT_GEWOLLT = ["Myriad Pro", "Fira Sans Condensed", "Fira Sans"]
+
+#: Notnagel, damit eine Grafik auch auf einem nackten System entsteht. Sie
+#: sieht dann anders aus als das Veröffentlichte – check_setup.py sagt es.
+FONT_ERSATZ = ["Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"]
+
+FONT_FAMILY = FONT_GEWOLLT + FONT_ERSATZ
 
 #: Zusammen mit der Familie wählt das den schmalen Schnitt aus
 #: (/Library/Fonts/MyriadPro-Cond.otf). Fehlt ein schmaler Schnitt, nimmt

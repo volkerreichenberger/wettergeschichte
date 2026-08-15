@@ -3,9 +3,16 @@ pandas>=2.0
 numpy>=1.24
 matplotlib>=3.7
 
-# nur für einzelne Grafikvarianten
+# nur für einzelne Grafikvarianten aus run_all.py
 plotnine>=0.13        # plots/python/nyt_plotnine.py
 plotly>=5.20          # plots/python/nyt_plotly.py
 kaleido>=0.2          # statischer PNG-Export für plotly
 
-# R-Varianten brauchen: ggplot2, patchwork, lattice, ragg
+# Nicht über pip zu bekommen, aber gebraucht:
+#
+#   Schrift   Myriad Pro (Mac) oder Fira Sans (Linux) – beide mit schmalem
+#             Schnitt. Fehlt beides, zeichnet matplotlib klaglos in DejaVu
+#             Sans, und die Beiträge sehen anders aus als die bisherigen.
+#   R         nur für plots/R/*: ggplot2, lattice, ragg
+#
+# 'python3 check_setup.py' prüft beides zusammen mit dem Rest der Umgebung.
