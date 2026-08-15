@@ -170,12 +170,19 @@ Historie umzuschreiben hilft nicht, weil das Token in der Zwischenzeit
 
 ## Auf einem neuen Rechner einrichten
 
+Der Ablauf ist einmal auf einem Debian-Server durchgespielt worden; die
+Stolpersteine unten sind die, die dabei wirklich aufgetreten sind.
+
 ```bash
 git clone https://github.com/volkerreichenberger/wettergeschichte.git
 git clone https://github.com/volkerreichenberger/wettergeschichtebilder.git
 cd wettergeschichte
 git config core.hooksPath hooks          # Sperre gegen Zugangsdaten im Repo
+
+python3 -m venv .venv                    # siehe "Virtuelle Umgebung" unten
+source .venv/bin/activate
 pip install -r requirements.txt
+
 cp /pfad/vom/alten/rechner/post_daily.conf .   # oder aus der Vorlage bauen
 chmod 600 post_daily.conf
 python3 check_setup.py
@@ -187,31 +194,106 @@ aber das Aussehen oder eine Nebenvariante). Mit `--alles` kommen die
 Vergleichsvarianten dazu (plotnine, plotly, R), mit `--keine-netzpruefung`
 bleibt es offline.
 
-Drei Dinge, die beim Umzug erfahrungsgemäß fehlen:
+### Virtuelle Umgebung
 
-**Die Schrift.** Die Beiträge sind schmal gesetzt: erste Wahl Myriad Pro,
-Ersatz **Fira Sans**. Fehlt beides, nimmt matplotlib klaglos DejaVu Sans — die
-Bilder entstehen, sehen aber anders aus als alles bisher Veröffentlichte, und
-das fällt erst auf Instagram auf. Deshalb prüft `check_setup.py` das eigens.
+Auf Debian 12 und Ubuntu ab 23.04 lehnt das System-Python `pip install` ab
+(`externally-managed-environment`, PEP 668), und `pip` heißt dort `pip3` oder
+gar nichts. Deshalb der Umweg über `python3 -m venv` — dafür braucht es
+`sudo apt install python3-venv python3-pip`.
+
+Zu beachten: `./post_daily.py` startet über die Shebang-Zeile das *System*-
+Python, nicht das der Umgebung. Also entweder vorher `source .venv/bin/activate`
+oder gleich den vollen Pfad nehmen. Die Unterprozesse erben die Umgebung, weil
+`post_daily.py` sie mit `sys.executable` aufruft:
 
 ```bash
-# Debian/Ubuntu – Paketname je nach Version, sonst von fonts.google.com
-apt search fira
-# Alternativ von Hand:
-mkdir -p ~/.local/share/fonts && cp FiraSans*.ttf ~/.local/share/fonts/
-fc-cache -f && rm -rf ~/.cache/matplotlib
+~/wettergeschichte/.venv/bin/python3 post_daily.py --skip-fetch
 ```
 
-**`BILDER` in `post_daily.conf`.** Der Pfad zur Bildablage steht dort absolut
-und zeigt nach dem Kopieren noch auf den alten Rechner. Auf den neuen Pfad
-setzen, sonst schlägt der Upload fehl.
+```cron
+15 9 * * *  cd ~/wettergeschichte && .venv/bin/python3 post_daily.py --publish >> log/post.log 2>&1
+```
 
-**Push-Zugang zur Bildablage.** `post_daily.py` committet und pusht in
-`wettergeschichtebilder`. Ohne hinterlegte Zugangsdaten bleibt der Lauf dort
-stehen. Einmal von Hand `git -C <BILDER> push` testen.
+### Die Schrift
 
-Die Rohdaten liegen nicht im Repository — der erste Lauf holt sie beim DWD
-(ein paar hundert MB, einige Minuten).
+Die Beiträge sind schmal gesetzt: erste Wahl Myriad Pro, Ersatz **Fira Sans**.
+Fehlt beides, nimmt matplotlib klaglos DejaVu Sans — die Bilder entstehen,
+sehen aber anders aus als alles bisher Veröffentlichte, und das fällt erst auf
+Instagram auf. Deshalb prüft `check_setup.py` das eigens.
+
+Debian hat nur Fira *Code* (monospace) im Paketbestand, nicht Fira Sans, und
+`fonts.google.com/download?family=…` liefert inzwischen eine HTML-Seite statt
+eines ZIP-Archivs. Was bleibt, ist das Repository `google/fonts`:
+
+```bash
+mkdir -p ~/.local/share/fonts && cd ~/.local/share/fonts
+BASE=https://raw.githubusercontent.com/google/fonts/main/ofl
+for s in Regular Italic Medium SemiBold Bold; do
+  curl -fLO "$BASE/firasanscondensed/FiraSansCondensed-$s.ttf"
+  curl -fLO "$BASE/firasans/FiraSans-$s.ttf"
+done
+rm -rf ~/.cache/matplotlib      # sonst bleibt die alte Schriftliste stehen
+python3 -c "import matplotlib.font_manager as fm; print(sorted({f.name for f in fm.fontManager.ttflist if 'Fira' in f.name}))"
+```
+
+`fc-cache` wird **nicht** gebraucht: matplotlib sucht selbst in
+`~/.local/share/fonts` und überspringt die fontconfig-Abfrage stillschweigend,
+wenn `fc-list` fehlt. Auf einem nackten Server ist fontconfig oft nicht dabei.
+
+### `BILDER` in `post_daily.conf`
+
+Der Pfad zur Bildablage steht dort absolut und zeigt nach dem Kopieren noch auf
+den alten Rechner. `WG_UPLOAD_CMD` benutzt `$BILDER`, mehr ist nicht zu ändern.
+
+### Push-Zugang zur Bildablage
+
+`post_daily.py` committet und pusht in `wettergeschichtebilder`. Für einen
+Rechner, der unbeaufsichtigt per cron läuft, ist ein **SSH-Deploy-Key** die
+richtige Wahl: Er gilt nur für dieses eine Repository, läuft nicht ab, und ein
+Token im Klartext erübrigt sich.
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/id_wettergeschichtebilder -N "" -C "cron"
+cat ~/.ssh/id_wettergeschichtebilder.pub
+```
+
+Den Text unter *Settings → Deploy keys → Add deploy key* des Repositories
+eintragen, **"Allow write access" ankreuzen**. Dann:
+
+```bash
+cat >> ~/.ssh/config <<'ENDE'
+
+Host github-bilder
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/id_wettergeschichtebilder
+  IdentitiesOnly yes
+ENDE
+chmod 600 ~/.ssh/config
+
+git -C ~/wettergeschichtebilder remote set-url origin git@github-bilder:volkerreichenberger/wettergeschichtebilder.git
+ssh -T git@github-bilder          # Fingerabdruck einmal mit "yes" bestätigen
+git -C ~/wettergeschichtebilder push
+```
+
+Das `ssh -T` ist kein Zierrat: Ohne den Eintrag in `~/.ssh/known_hosts` bleibt
+der cron-Lauf später an der Fingerabdruck-Frage hängen, und niemand ist da, der
+antwortet.
+
+### Daten und Kennzahlen
+
+Die Rohdaten liegen nicht im Repository. `post_daily.py` holt sie beim ersten
+Lauf und leitet dabei auch die Kennzahlen ab — beides zusammen überspringt
+`--skip-fetch` aber. Wer mit `--skip-fetch` anfängt, braucht sie einmal von Hand:
+
+```bash
+python3 fetch_dwd.py --stations 4931 4928
+python3 fetch_hourly.py --stations 4931
+python3 climatology.py --stations 4931 4928 --year 2025   # Vorjahr: Quartalsserie
+python3 climatology.py --stations 4931 4928 --year 2026
+```
+
+---
 
 ## Alles neu zeichnen, zum Vergleichen
 

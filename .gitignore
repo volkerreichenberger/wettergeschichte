@@ -6,6 +6,11 @@ posts/
 
 __pycache__/
 *.pyc
+
+# Virtuelle Umgebung – auf Debian/Ubuntu der uebliche Weg, weil das
+# System-Python Installationen ablehnt (PEP 668).
+.venv/
+venv/
 .Rhistory
 .RData
 .DS_Store
