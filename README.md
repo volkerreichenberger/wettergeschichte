@@ -30,8 +30,9 @@ Der Reihe nach: Token prüfen und bei Bedarf verlängern → Daten beim DWD
 holen → Kennzahlen ableiten → alle Beiträge bauen → Bilder in die
 Bildablage schieben → auf Instagram veröffentlichen.
 
-**Nicht vor 9:15 Uhr laufen lassen.** Der DWD schiebt die Daten des Vortags
-morgens gegen 8:40 bis 9:00 Uhr nach. Wer früher startet, baut den Beitrag mit
+**Nicht vor 10 Uhr laufen lassen.** Der DWD schiebt die Daten des Vortags
+morgens gegen 8:40 bis 9:00 Uhr nach; die Stunde Abstand fängt einen
+verspäteten Nachschub ab. Wer früher startet, baut den Beitrag mit
 vorgestrigen Zahlen — das Skript merkt das nicht, weil es keine Lücke gibt,
 sondern nur einen Tag weniger.
 
@@ -126,7 +127,7 @@ python3 instagram_post.py --caption-file $POST/text.txt \
 Automatisch täglich:
 
 ```cron
-15 9 * * *  cd ~/Programming/wettergeschichte && ./post_daily.py --publish >> log/post.log 2>&1
+0 10 * * *  cd ~/Programming/wettergeschichte && ./post_daily.py --publish >> log/post.log 2>&1
 ```
 
 Auf einem Server mit virtueller Umgebung sieht die Zeile anders aus, und es
@@ -306,17 +307,26 @@ crontab -e
 ```
 
 ```cron
-15 9 * * *  cd /home/nxtstep/wettergeschichte && .venv/bin/python3 post_daily.py --publish >> log/post.log 2>&1
+0 10 * * *  cd /home/nxtstep/wettergeschichte && .venv/bin/python3 post_daily.py --publish >> log/post.log 2>&1
 ```
 
-Vier Dinge, an denen cron-Einträge scheitern:
+Fünf Dinge, an denen cron-Einträge scheitern:
 
 * **Absoluter Pfad.** cron führt die Zeile mit `/bin/sh` aus, und deren `PATH`
   ist kurz. `~` durch den vollen Pfad ersetzen, `python3` durch
   `.venv/bin/python3` — sonst nimmt er das System-Python ohne pandas.
-* **Uhrzeit in der Zeitzone des Servers**, nicht in Deiner. `timedatectl`
-  zeigt sie. Der DWD liefert die Vortagsdaten gegen 8:40–9:00 Uhr MEZ/MESZ;
-  steht der Server auf UTC, muss die Zeile im Sommer auf `15 7` stehen.
+* **Uhrzeit in der Zeitzone des Servers**, nicht in Deiner — `timedatectl`
+  zeigt sie. Der DWD liefert die Vortagsdaten gegen 8:40–9:00 Uhr deutscher
+  Zeit. Auf `Europe/Berlin` passt `0 10`, und die Umstellung zwischen Sommer-
+  und Winterzeit erledigt cron mit. Auf UTC müsste die Zeile zweimal im Jahr
+  gewechselt werden (`0 8` beziehungsweise `0 9`); einfacher ist
+  `sudo timedatectl set-timezone Europe/Berlin`.
+* **Geht die Uhr richtig?** `timedatectl` zeigt es als
+  `System clock synchronized`. Steht dort `no`, läuft die Uhr womöglich weg,
+  und der Auftrag startet irgendwann vor den DWD-Daten — das fällt nicht als
+  Fehler auf, sondern nur als fehlender Tag im Bild. Abhilfe:
+  `sudo timedatectl set-ntp true`. Bleibt es bei `no`, sperrt vermutlich die
+  Firewall ausgehendes UDP auf Port 123.
 * **Ausgabe umleiten.** Ohne `>> log/post.log 2>&1` verschickt cron sie per
   Mail, und ohne Mailsystem ist sie schlicht weg — auch die Fehlermeldungen.
 * **Erst von Hand prüfen**, und zwar mit derselben leeren Umgebung, die cron
