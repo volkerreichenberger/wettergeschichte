@@ -19,10 +19,18 @@ BEWOELKUNG_STATION=4928
 # --- Bild öffentlich ablegen ------------------------------------------------
 # Die Instagram-API lädt keine Datei hoch, sie holt sie von einer URL.
 # {src}  = lokaler Pfad zum JPEG
-# {name} = Dateiname, unter dem es öffentlich liegen soll
+# {name} = Pfad, unter dem es öffentlich liegen soll — mit Tagesverzeichnis
+#          davor, also z. B.
+#          2026/06/14/drei_tage_04931_2026-06-13_bild.jpg
+#
+# Das Tagesverzeichnis ist der Tag des Laufs; alle Bilder eines Laufs landen
+# damit beieinander. In $BILDER legt post_daily.py es selbst an, weil cp das
+# nicht tut. Wer nicht über ein lokales Verzeichnis geht, muss selbst dafür
+# sorgen: S3 erzeugt das Präfix beim Kopieren von allein, scp braucht ein
+# vorangestelltes mkdir.
 
 # Variante A: eigener Webspace per scp
-# WG_UPLOAD_CMD='scp {src} web:/var/www/wetter/{name}'
+# WG_UPLOAD_CMD='ssh web "mkdir -p /var/www/wetter/$(dirname {name})" && scp {src} web:/var/www/wetter/{name}'
 # WG_PUBLIC_URL='https://example.org/wetter/{name}'
 
 # Variante B: GitHub Pages – ein eigenes öffentliches Repository für die Bilder.

@@ -101,6 +101,22 @@ holt deshalb die Daten beider Stationen und gibt jeder Variante die passende mit
 Jeder Beitrag landet als eigener Ordner unter `posts/` mit `bild.jpg`
 (beziehungsweise `bild_1.jpg` … `bild_6.jpg`) und `text.txt`.
 
+In der Bildablage liegen die Bilder nach **Tagen** sortiert, `JJJJ/MM/TT`:
+
+```
+wettergeschichtebilder/2026/06/14/nyt_serie_04931_2026-06-13_bild_1.jpg
+wettergeschichtebilder/2026/06/14/drei_tage_04931_2026-06-13_bild.jpg
+```
+
+Maßgeblich ist der Tag des **Laufs**, nicht das Datum im Beitragsnamen — das
+trägt je nach Variante etwas anderes, bei der Bewölkung nur einen Monat. So
+liegen alle Bilder eines Laufs beieinander. Die öffentliche URL bekommt das
+Verzeichnis einfach vorangestellt:
+
+```
+https://volkerreichenberger.github.io/wettergeschichtebilder/2026/06/14/<name>.jpg
+```
+
 **Achtung bei Handänderungen am Bildtext:** Jeder Lauf von `post_daily.py`
 baut Bild *und* `text.txt` neu und überschreibt sie. Wer den Text vor dem
 Veröffentlichen anpassen will, geht deshalb am Skript vorbei — die Bilder
@@ -108,12 +124,16 @@ liegen nach Schritt 3 ja schon hochgeladen bereit:
 
 ```bash
 POST=posts/drei_tage_04931_2026-08-10
+TAG=$(date +%Y/%m/%d)          # Tagesverzeichnis des Laufs, der die Bilder ablegte
 $EDITOR $POST/text.txt
 set -a; . ./post_daily.conf; set +a
 python3 instagram_post.py --caption-file $POST/text.txt \
-    --image-url https://volkerreichenberger.github.io/wettergeschichtebilder/$(basename $POST)_bild.jpg \
+    --image-url https://volkerreichenberger.github.io/wettergeschichtebilder/$TAG/$(basename $POST)_bild.jpg \
     --publish
 ```
+
+`$TAG` stimmt nur, solange Schritt 3 und dieser Aufruf am selben Tag laufen —
+über Mitternacht hinweg das Verzeichnis von Hand eintragen.
 
 ### Wenn etwas schiefgeht
 

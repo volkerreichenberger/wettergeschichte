@@ -84,8 +84,14 @@ ausgeliefert über GitHub Pages. `post_daily.py` kopiert das fertige JPEG dorthi
 committet, pusht – und übergibt Instagram die URL
 
 ```
-https://volkerreichenberger.github.io/wettergeschichtebilder/<name>.jpg
+https://volkerreichenberger.github.io/wettergeschichtebilder/2026/06/14/<name>.jpg
 ```
+
+Die Bilder liegen nach Tagen sortiert, `JJJJ/MM/TT`, nach dem Tag des Laufs.
+Ohne diese Aufteilung stünden nach einem Jahr rund 1500 Dateien nebeneinander
+in einem Verzeichnis. Das Tagesverzeichnis legt `post_daily.py` vor dem
+Kopieren selbst an, weil `cp` das nicht tut; in `WG_PUBLIC_URL` steckt es
+bereits in `{name}`, dort ist deshalb nichts zu ändern.
 
 Das kostet nichts und braucht keinen Server. Der Pfad steht in
 `post_daily.conf` (`BILDER=…`); liegt das Repository woanders, nur dort ändern.

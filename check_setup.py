@@ -222,7 +222,9 @@ def pruefe_bildablage(b: Bericht, conf: dict) -> None:
         if "{src}" in conf.get("WG_UPLOAD_CMD", ""):
             b.hinweis("BILDER nicht gesetzt",
                       "WG_UPLOAD_CMD verweist auf ein Verzeichnis, das in der "
-                      "Konfiguration fehlt")
+                      "Konfiguration fehlt — post_daily.py kann das "
+                      "Tagesverzeichnis JJJJ/MM/TT dort dann nicht anlegen, "
+                      "und ein 'cp' hinein schlägt fehl")
         return
 
     pfad = Path(os.path.expanduser(ziel))

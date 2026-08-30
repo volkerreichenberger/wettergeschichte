@@ -268,8 +268,43 @@ def beitrag(variante: str, args, conf: dict) -> bool | None:
     return veroeffentlichen(urls, text, args)
 
 
+def datumspfad(tag: date | None = None) -> str:
+    """Verzeichnis in der Bildablage: ``JJJJ/MM/TT`` des Tages, an dem gebaut wird.
+
+    Bewusst der Tag des Laufs und nicht das Datum im Beitragsnamen. Der trägt
+    je nach Variante etwas anderes – die Bewölkung nur einen Monat, die
+    übrigen den letzten Tag mit Daten, also gestern. So liegen alle Bilder
+    eines Laufs beieinander, und ein Lauf mit ``--stand`` legt seine Bilder
+    dorthin, wo er sie wirklich erzeugt hat.
+    """
+    return f"{tag or date.today():%Y/%m/%d}"
+
+
+def tagesverzeichnis(conf: dict, pfad: str) -> None:
+    """Legt ``$BILDER/JJJJ/MM/TT`` an, bevor der Ablegebefehl läuft.
+
+    ``WG_UPLOAD_CMD`` steht in ``post_daily.conf`` und wandert bei einem
+    Update des Repositories nicht mit; ein ``cp {src} $BILDER/{name}`` mit
+    Unterverzeichnis im Namen liefe deshalb ins Leere, denn cp legt keine
+    Verzeichnisse an. Das hier zu tun, hält die Konfiguration unverändert
+    gültig – auf dem Server genügt ein ``git pull``.
+
+    Angelegt wird nur, wenn ``BILDER`` bereits existiert: zeigt der Pfad nach
+    einem Rechnerwechsel noch auf die alte Maschine, soll kein leerer
+    Verzeichnisbaum entstehen. Dann ist die Fehlermeldung des Ablegebefehls
+    die deutlichere Auskunft.
+    """
+    basis = conf.get("BILDER")
+    if not basis:
+        return
+    wurzel = Path(os.path.expanduser(basis))
+    if wurzel.is_dir():
+        (wurzel / pfad).mkdir(parents=True, exist_ok=True)
+
+
 def bilder_ablegen(bilder: list[Path], ordner: Path, args, conf: dict) -> list[str] | None:
     """Schiebt die Bilder an ihren öffentlichen Ort. None heißt: Abbruch."""
+    pfad = datumspfad()
     befehl_vorlage = conf.get("WG_UPLOAD_CMD")
     url_vorlage = conf.get("WG_PUBLIC_URL")
     if not (befehl_vorlage and url_vorlage):
@@ -278,12 +313,14 @@ def bilder_ablegen(bilder: list[Path], ordner: Path, args, conf: dict) -> list[s
             print("   Ohne öffentlich erreichbare Bild-URL kann nicht "
                   "veröffentlicht werden.", file=sys.stderr)
             return None
-        return [f"https://BITTE-NOCH-EINTRAGEN.example/{b.name}" for b in bilder]
+        return [f"https://BITTE-NOCH-EINTRAGEN.example/{pfad}/{b.name}" for b in bilder]
 
-    print("-- Bilder ablegen")
+    print(f"-- Bilder ablegen (Tagesverzeichnis {pfad})")
+    if args.upload:
+        tagesverzeichnis(conf, pfad)
     urls = []
     for bild in bilder:
-        name = f"{ordner.name}_{bild.name}"
+        name = f"{pfad}/{ordner.name}_{bild.name}"
         urls.append(url_vorlage.replace("{name}", name))
         befehl = befehl_vorlage.replace("{src}", str(bild)).replace("{name}", name)
         if not args.upload:
