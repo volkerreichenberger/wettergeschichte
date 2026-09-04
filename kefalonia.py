@@ -4,6 +4,7 @@
     ./kefalonia.py                          beide Bilder nach posts/kefalonia/
     ./kefalonia.py --nur stunden
     ./kefalonia.py --bis 2026-09-01         Fenster endet an einem frueheren Tag
+    ./kefalonia.py --tage 12 --breit 4      laengeres Fenster auf breitem Blatt
     ./kefalonia.py --quelle metar           echte Flughafenmeldungen statt Modell
     ./kefalonia.py --neu                    Zwischenspeicher verwerfen
 
@@ -11,7 +12,8 @@ Es entstehen:
 
 * **Stundenkurve** – Temperatur (blau) und Luftfeuchtigkeit (grau, Skala rechts)
   der letzten fünf Tage bis zum letzten vorliegenden Wert. ``--bis`` verschiebt
-  das Fenster in die Vergangenheit, seine Länge bleibt.
+  das Fenster in die Vergangenheit, seine Länge bleibt. Für einen längeren
+  Zeitraum ``--tage`` heraufsetzen und mit ``--breit`` Platz dafür schaffen.
 * **NYT-Diagramm** – dasselbe Bild wie für Stuttgart, gezeichnet mit den
   Funktionen aus ``plots/python/nyt_matplotlib.py``.
 
@@ -234,7 +236,14 @@ def tageswerte(neu: bool = False) -> pd.DataFrame:
 # Stundenkurve: Temperatur und Feuchte
 # --------------------------------------------------------------------------- #
 
-def zeichne_stunden(df: pd.DataFrame, quelle: str, pfad: Path, dpi: int) -> None:
+def zeichne_stunden(df: pd.DataFrame, quelle: str, pfad: Path, dpi: int,
+                    breite: float = 1.0) -> None:
+    """Zeichnet die Stundenkurve; ``breite`` streckt das Blatt nach rechts.
+
+    Die Höhe und alle Schriftgrößen bleiben dabei, wie sie sind – gestreckt
+    wird nur die Zeitachse. Damit die Ränder gleich breit aussehen, werden
+    ihre Anteile durch den Faktor geteilt.
+    """
     plt.rcParams.update({**wg.rc_font(), "figure.facecolor": wg.BACKGROUND,
                          "savefig.facecolor": wg.BACKGROUND, "text.color": wg.TEXT})
 
@@ -242,9 +251,10 @@ def zeichne_stunden(df: pd.DataFrame, quelle: str, pfad: Path, dpi: int) -> None
     df["hour"] = df["timestamp"].dt.hour
     df["x"] = range(len(df))
 
-    fig = plt.figure(figsize=(STUNDEN_PX / 200, STUNDEN_PX / 200), dpi=200)
+    fig = plt.figure(figsize=(breite * STUNDEN_PX / 200, STUNDEN_PX / 200), dpi=200)
+    rand = 0.105 / breite
     # Oben Luft für Titel und Unterzeile, unten für die zweizeiligen Tagesnamen.
-    ax = fig.add_axes((0.105, 0.185, 0.795, 0.645))
+    ax = fig.add_axes((rand, 0.185, 1 - 0.205 / breite, 0.645))
     rechts = ax.twinx()
 
     # Feuchte zuerst und nach hinten: die Temperatur ist die Hauptaussage.
@@ -272,7 +282,7 @@ def zeichne_stunden(df: pd.DataFrame, quelle: str, pfad: Path, dpi: int) -> None
         marken[-1] = len(df) - 0.5
 
     ax.set_xticks(marken)
-    ax.set_xticklabels(namen, fontsize=max(9.0, min(19.0, 57.0 / tage)),
+    ax.set_xticklabels(namen, fontsize=max(9.0, min(19.0, 57.0 * breite / tage)),
                        linespacing=1.4)
     if angebrochen:
         ax.get_xticklabels()[-1].set_horizontalalignment("right")
@@ -285,12 +295,16 @@ def zeichne_stunden(df: pd.DataFrame, quelle: str, pfad: Path, dpi: int) -> None
     # nachgemessen: verkleinern, bis sich nichts mehr überlappt.
     fig.canvas.draw()
 
-    def stossen_aneinander() -> bool:
+    def stossen_aneinander(groesse: float) -> bool:
+        # Verlangt wird nicht nur, dass nichts überlappt, sondern etwa ein
+        # halbes Zeichen Luft dazwischen – sonst kleben die Namen auf dem
+        # breiten Blatt aneinander, wo die Schrift gross bleiben darf.
+        luft = 0.6 * groesse * fig.dpi / 72
         kaesten = [b.get_window_extent() for b in ax.get_xticklabels()]
-        return any(a.x1 + 6 > b.x0 for a, b in zip(kaesten, kaesten[1:]))
+        return any(a.x1 + luft > b.x0 for a, b in zip(kaesten, kaesten[1:]))
 
     groesse = ax.get_xticklabels()[0].get_fontsize()
-    while groesse > 8.0 and stossen_aneinander():
+    while groesse > 8.0 and stossen_aneinander(groesse):
         groesse -= 0.5
         for beschriftung in ax.get_xticklabels():
             beschriftung.set_fontsize(groesse)
@@ -326,12 +340,12 @@ def zeichne_stunden(df: pd.DataFrame, quelle: str, pfad: Path, dpi: int) -> None
     leg.set_zorder(11)
 
     erste, letzte = df["timestamp"].iloc[0], df["timestamp"].iloc[-1]
-    fig.text(0.105, 0.977, ORT, fontsize=23, fontweight="bold", ha="left", va="top")
-    fig.text(0.105, 0.928,
+    fig.text(rand, 0.977, ORT, fontsize=23, fontweight="bold", ha="left", va="top")
+    fig.text(rand, 0.928,
              f"Stündliche Temperatur und Luftfeuchtigkeit, "
              f"{wg.de_date(erste)} bis {wg.de_date(letzte)} {letzte.year}",
              fontsize=11.5, color=wg.TEXT_MUTED, ha="left", va="top")
-    fig.text(0.105, 0.035,
+    fig.text(rand, 0.035,
              f"{quelle}  ·  {FLUGHAFEN['lat']:.4f}° N, {FLUGHAFEN['lon']:.4f}° O  ·  "
              f"Stand {letzte:%d.%m.%Y, %H} Uhr",
              fontsize=8.5, color=wg.TEXT_MUTED, ha="left", va="top")
@@ -401,6 +415,11 @@ def main(argv=None) -> int:
     ap.add_argument("--bis", default=date.today().isoformat(), metavar="JJJJ-MM-TT",
                     help=f"letzter Tag der Stundenkurve; gezeigt werden immer "
                          f"die {STUNDEN_TAGE} Tage bis dahin")
+    ap.add_argument("--tage", type=int, default=STUNDEN_TAGE, metavar="N",
+                    help=f"Länge des Stundenfensters in Tagen (Vorgabe: {STUNDEN_TAGE}); "
+                         f"mehr Tage brauchen ein breiteres Blatt")
+    ap.add_argument("--breit", type=float, default=1.0, metavar="FAKTOR",
+                    help="Blattbreite der Stundenkurve, 1 = quadratisch, 4 = vierfach")
     ap.add_argument("--jahr", type=int, default=date.today().year,
                     help="Jahr des NYT-Diagramms")
     ap.add_argument("--quelle", choices=["modell", "metar"], default="modell",
@@ -418,7 +437,7 @@ def main(argv=None) -> int:
     if args.nur != "nyt":
         holen = stundenwerte_metar if args.quelle == "metar" else stundenwerte_modell
         von = (date.fromisoformat(args.bis)
-               - timedelta(days=STUNDEN_TAGE - 1)).isoformat()
+               - timedelta(days=max(1, args.tage) - 1)).isoformat()
         df, quelle = holen(von, args.bis)
         if df["temp_c"].dropna().empty:
             raise SystemExit("keine Stundenwerte im Zeitraum")
@@ -426,11 +445,14 @@ def main(argv=None) -> int:
         print(f"-- Stundenkurve: {len(gueltig)} Werte, "
               f"{gueltig['timestamp'].min():%d.%m. %H} bis "
               f"{gueltig['timestamp'].max():%d.%m. %H} Uhr")
+        # Das breite Blatt bekommt seinen eigenen Namen, sonst überschriebe es
+        # die quadratische Fassung desselben Zeitraums.
+        weite = f"_{args.breit:g}x" if args.breit != 1.0 else ""
         zeichne_stunden(
             df, quelle,
             args.output / f"temperatur_feuchte_{von}_bis_"
-                          f"{gueltig['timestamp'].max():%Y-%m-%d}.{args.format}",
-            args.dpi)
+                          f"{gueltig['timestamp'].max():%Y-%m-%d}{weite}.{args.format}",
+            args.dpi, args.breit)
 
     if args.nur != "stunden":
         tage = tageswerte(args.neu)
