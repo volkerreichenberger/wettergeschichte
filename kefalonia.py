@@ -3,14 +3,15 @@
 
     ./kefalonia.py                          beide Bilder nach posts/kefalonia/
     ./kefalonia.py --nur stunden
-    ./kefalonia.py --von 2026-08-20
+    ./kefalonia.py --bis 2026-09-01         Fenster endet an einem frueheren Tag
     ./kefalonia.py --quelle metar           echte Flughafenmeldungen statt Modell
     ./kefalonia.py --neu                    Zwischenspeicher verwerfen
 
 Es entstehen:
 
 * **Stundenkurve** – Temperatur (blau) und Luftfeuchtigkeit (grau, Skala rechts)
-  vom ``--von``-Tag bis zum letzten vorliegenden Wert.
+  der letzten fünf Tage bis zum letzten vorliegenden Wert. ``--bis`` verschiebt
+  das Fenster in die Vergangenheit, seine Länge bleibt.
 * **NYT-Diagramm** – dasselbe Bild wie für Stuttgart, gezeichnet mit den
   Funktionen aus ``plots/python/nyt_matplotlib.py``.
 
@@ -76,6 +77,11 @@ REFERENZ = (1991, 2020)
 #: Grau der Feuchtekurve – dunkel genug zum Lesen, blass genug, um der
 #: blauen Temperaturkurve den Vortritt zu lassen.
 FEUCHTE = "#8c8c8c"
+
+#: Länge des Stundenfensters. Fünf Tage sind der Kompromiss: lang genug, um
+#: den Gang des Wetters zu sehen, kurz genug, dass die einzelne Stunde noch
+#: Platz auf der Achse hat und die Tagesnamen nicht aneinanderstoßen.
+STUNDEN_TAGE = 5
 
 STUNDEN_PX = 1080
 CACHE = ROOT / "data" / "kefalonia"
@@ -252,9 +258,43 @@ def zeichne_stunden(df: pd.DataFrame, quelle: str, pfad: Path, dpi: int) -> None
     # Die Tagesachse ist auf drei Tage ausgelegt und setzt 19 Punkt. Ab dem
     # vierten Tag stoßen die Datumszeilen sonst aneinander, deshalb die Größe
     # aus der Breite ableiten, die einem Tag tatsächlich bleibt.
-    tage = max(1, len(ax.get_xticks()))
-    for beschriftung in ax.get_xticklabels():
-        beschriftung.set_fontsize(max(9.0, min(19.0, 57.0 / tage)))
+    marken = list(ax.get_xticks())
+    namen = [b.get_text() for b in ax.get_xticklabels()]
+    tage = max(1, len(marken))
+
+    # Der letzte Tag ist meist angebrochen. Sein Name stünde dann mittig über
+    # wenigen Stunden und damit halb über dem Nachbarn; rechtsbündig am Rand
+    # der Achse hat er Platz. Ab einem halben Tag Breite passt er mittig.
+    letzte_stunden = int((df["timestamp"].iloc[-1]
+                          - df["timestamp"].iloc[-1].normalize()).total_seconds() // 3600) + 1
+    angebrochen = len(marken) > 1 and letzte_stunden < 12
+    if angebrochen:
+        marken[-1] = len(df) - 0.5
+
+    ax.set_xticks(marken)
+    ax.set_xticklabels(namen, fontsize=max(9.0, min(19.0, 57.0 / tage)),
+                       linespacing=1.4)
+    if angebrochen:
+        ax.get_xticklabels()[-1].set_horizontalalignment("right")
+    ax.tick_params(axis="x", length=0, pad=10)
+    ax.set_xlim(-0.5, len(df) - 0.5)
+
+    # Ob die Namen nebeneinander passen, hängt nicht nur an ihrer Zahl, sondern
+    # an ihrer Länge („1. September“ ist breiter als „5. Mai“) und daran, wie
+    # schmal der angebrochene letzte Tag ist. Deshalb nicht geschätzt, sondern
+    # nachgemessen: verkleinern, bis sich nichts mehr überlappt.
+    fig.canvas.draw()
+
+    def stossen_aneinander() -> bool:
+        kaesten = [b.get_window_extent() for b in ax.get_xticklabels()]
+        return any(a.x1 + 6 > b.x0 for a, b in zip(kaesten, kaesten[1:]))
+
+    groesse = ax.get_xticklabels()[0].get_fontsize()
+    while groesse > 8.0 and stossen_aneinander():
+        groesse -= 0.5
+        for beschriftung in ax.get_xticklabels():
+            beschriftung.set_fontsize(groesse)
+        fig.canvas.draw()
 
     ax.grid(axis="y", color=wg.GRID, lw=0.5, alpha=0.8)
     ax.set_axisbelow(True)
@@ -358,9 +398,9 @@ def zeichne_nyt(tage: pd.DataFrame, jahr: int, pfad: Path, dpi: int) -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--von", default="2026-08-26", metavar="JJJJ-MM-TT",
-                    help="Beginn der Stundenkurve (Vorgabe: 2026-08-26)")
-    ap.add_argument("--bis", default=date.today().isoformat(), metavar="JJJJ-MM-TT")
+    ap.add_argument("--bis", default=date.today().isoformat(), metavar="JJJJ-MM-TT",
+                    help=f"letzter Tag der Stundenkurve; gezeigt werden immer "
+                         f"die {STUNDEN_TAGE} Tage bis dahin")
     ap.add_argument("--jahr", type=int, default=date.today().year,
                     help="Jahr des NYT-Diagramms")
     ap.add_argument("--quelle", choices=["modell", "metar"], default="modell",
@@ -377,7 +417,9 @@ def main(argv=None) -> int:
 
     if args.nur != "nyt":
         holen = stundenwerte_metar if args.quelle == "metar" else stundenwerte_modell
-        df, quelle = holen(args.von, args.bis)
+        von = (date.fromisoformat(args.bis)
+               - timedelta(days=STUNDEN_TAGE - 1)).isoformat()
+        df, quelle = holen(von, args.bis)
         if df["temp_c"].dropna().empty:
             raise SystemExit("keine Stundenwerte im Zeitraum")
         gueltig = df.dropna(subset=["temp_c"])
@@ -386,7 +428,7 @@ def main(argv=None) -> int:
               f"{gueltig['timestamp'].max():%d.%m. %H} Uhr")
         zeichne_stunden(
             df, quelle,
-            args.output / f"temperatur_feuchte_{args.von}_bis_"
+            args.output / f"temperatur_feuchte_{von}_bis_"
                           f"{gueltig['timestamp'].max():%Y-%m-%d}.{args.format}",
             args.dpi)
 
