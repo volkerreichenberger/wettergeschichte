@@ -46,6 +46,10 @@ class Hourly:
     columns: dict[str, str]
     qn: str
     note: str = ""
+    #: Spalten (Zielnamen), die Text bleiben statt zu Zahlen zu werden.
+    text_columns: tuple[str, ...] = ()
+    #: Werte je Zielspalte, die „nicht bestimmbar" heißen und zu NaN werden.
+    unbestimmbar: dict[str, int] | None = None
 
     def filename_regex(self, station_id: int) -> str:
         return self.pattern.format(sid=f"{station_id:05d}")
@@ -68,6 +72,20 @@ HOURLY_DATASETS: dict[str, Hourly] = {
         columns={"R1": "precip_mm", "RS_IND": "precip_ind", "WRTR": "precip_form"},
         qn="QN_8",
         note="reicht nur bis 1995 (4931) bzw. 1998 (4928) zurück",
+    ),
+    "cloudiness": Hourly(
+        key="cloudiness",
+        path="cloudiness",
+        label="Bedeckungsgrad in Achteln, stündlich",
+        pattern=r"stundenwerte_N_{sid}_.*\.zip",
+        columns={"V_N": "cloud_okta", "V_N_I": "cloud_source"},
+        qn="QN_8",
+        # V_N_I sagt, wer gemessen hat: I = Instrument (Ceilometer), P = Person.
+        text_columns=("cloud_source",),
+        # V_N = -1 heißt „nicht bestimmbar", meist Nebel. Als Zahl gelesen wäre
+        # das „klarer als wolkenlos" – deshalb NaN.
+        unbestimmbar={"cloud_okta": -1},
+        note="4931 seit 1949, 4928 seit 1984; Zeitangaben in UTC",
     ),
 }
 
@@ -99,7 +117,13 @@ def parse_product(blob: bytes, ds: Hourly, source: str) -> pd.DataFrame:
     cols = ["station_id", "timestamp", *keep] + (["quality_level"] if ds.qn in df.columns else [])
     out = df[cols].rename(columns=keep).copy()
     for col in keep.values():
+        if col in ds.text_columns:
+            out[col] = out[col].astype("string").str.strip()
+            continue
         out[col] = pd.to_numeric(out[col], errors="coerce")
+        marke = (ds.unbestimmbar or {}).get(col)
+        if marke is not None:
+            out.loc[out[col] == marke, col] = float("nan")
     out["source"] = source
     return out
 

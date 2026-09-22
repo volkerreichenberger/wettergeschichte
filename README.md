@@ -67,7 +67,7 @@ durch Leerzeichen getrennt. Vorgabe ist
 | Variante | Beitrag | wie oft |
 |---|---|---|
 | `serie` | Karussell aus sechs Bildern: das Kalenderjahr, die vier jüngsten Quartale, die Legende | täglich |
-| `drei-tage` | die letzten drei Tage im Stundenverlauf, dahinter dieselben Tage der fünf Vorjahre | täglich |
+| `drei-tage` | die letzten drei Tage im Stundenverlauf, dahinter dieselben Tage der fünf Vorjahre; darunter der Himmel als Streifen (Bedeckungsgrad im Verlauf der Stunden, glatt interpoliert, nachts abgedunkelt, mit Sonnenauf- und -untergang) | täglich |
 | `bewoelkung` | Bewölkungskalender des **laufenden** Monats und der fünf Vorjahre, dazu ein Streifenbild über neun Jahre | täglich |
 | `regen-kumulativ` | vier Jahre untereinander, jedes als Summenkurve gegen den Normalverlauf | täglich |
 
@@ -468,6 +468,16 @@ Alles davon sind echte Eigenheiten der Messreihen, keine Fehler der Skripte:
   aus dem Jahr 2000 und die Julis **2000 bis 2008**.
 * **Strahlungsdaten** (`solar`) gibt es nur für 4928, und sie hinken den
   übrigen Messwerten rund vier Wochen hinterher.
+* **Stundenwerte des Bedeckungsgrades** (`hourly/cloudiness`, Datei
+  `hourly_cloudiness.csv`) gibt es für beide Stationen, 4931 seit 1949, 4928
+  seit 1984, tagesaktuell. Die 15-Monats-Lücke von 4931 steckt auch in der
+  Stundenreihe (zwei Stunden in fünfzehn Monaten). Für den Streifen im
+  Drei-Tage-Bild spielt das keine Rolle, er zeigt nur die aktuellen drei Tage;
+  deshalb kommt er von derselben Station wie die Temperatur. Der Wert **−1**
+  („nicht bestimmbar", meist Nebel) wird beim Einlesen zu NaN und bleibt im
+  Streifen weiß; `cloud_source` sagt, ob ein Ceilometer (`I`) oder ein
+  Beobachter (`P`) gemessen hat. Alle Stundenwerte des DWD stehen in **UTC**,
+  auch die Temperatur, also liegen die Tagesgrenzen im Bild bei 0 Uhr UTC.
 
 Die beiden Stationen taugen für Temperatur gut als Ersatz füreinander, für
 Bewölkung und Sonnenschein nicht — dort entscheidet die Lücke, welche Station

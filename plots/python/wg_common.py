@@ -8,6 +8,7 @@ Bilder nur in der Umsetzung, nicht in den Zahlen.
 from __future__ import annotations
 
 import argparse
+import math
 from datetime import date
 from pathlib import Path
 
@@ -46,6 +47,74 @@ WEEKDAYS_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
 #: Farbe der aktuellen Kurve im Drei-Tages-Bild (RGB 35, 102, 202).
 CURRENT_BLUE = "#2366ca"
+
+#: Bewölkungsskalen von wolkenlos nach bedeckt, fest an 0 bis 8 Achtel
+#: gebunden. „blau" liest den Himmel, „gelb" die Sonne. Gelb läuft über ein
+#: helles Sandton-Mittel statt direkt ins Grau – die direkte Mischung wird
+#: kakifarben. Kalenderblatt und Drei-Tage-Streifen nehmen dieselbe Quelle.
+SKALEN = {
+    "blau": ["#1f7ae0", "#7ea6cf", "#adb5bd", "#8d9296"],
+    "gelb": ["#f9c22e", "#f2e3b3", "#d5d8db", "#8d9296"],
+    # Himmel für den Sonnen-Stil: von klarem Blau ins Wolkengrau.
+    "sonne": ["#2f80ed", "#6f9ed6", "#a8b2bb", "#8d9296"],
+}
+#: Dieselben Achtel bei Nacht: klare Nacht tiefes Nachtblau, bedeckte Nacht
+#: dunkles Grau. Liegt durchweg unter dem dunkelsten Tagesgrau, damit der
+#: Wechsel auch bei ganztägig bedecktem Himmel sichtbar bleibt.
+NACHTSKALA = ["#0d1b3d", "#2b3a55", "#3a4048", "#33373b"]
+OKTA_MAX = 8
+
+#: Lage der Stationen aus der DWD-Stationsbeschreibung (Breite, Länge in Grad).
+STATION_KOORDINATEN = {4931: (48.6883, 9.2235), 4928: (48.8281, 9.2000)}
+
+#: Sonnenhöhe, unter der die Sonne als untergegangen gilt: Refraktion plus
+#: halber Sonnendurchmesser, wie in jedem Kalender.
+HORIZONT = -0.833
+
+
+def sonnenhoehe(zeitpunkt_utc, breite: float, laenge: float) -> float:
+    """Höhe der Sonne über dem Horizont in Grad, für einen UTC-Zeitpunkt.
+
+    Sonnenposition nach den Näherungsformeln des Astronomical Almanac
+    (Genauigkeit rund 0,01°, für Stundenfelder mehr als genug), Stundenwinkel
+    über die Sternzeit – so braucht es keine Zeitgleichung und kein Paket.
+    """
+    n = pd.Timestamp(zeitpunkt_utc).to_julian_date() - 2451545.0
+    mittlere_laenge = (280.460 + 0.9856474 * n) % 360
+    anomalie = math.radians((357.528 + 0.9856003 * n) % 360)
+    ekliptik = math.radians(
+        mittlere_laenge + 1.915 * math.sin(anomalie) + 0.020 * math.sin(2 * anomalie)
+    )
+    schiefe = math.radians(23.439 - 0.0000004 * n)
+    deklination = math.asin(math.sin(schiefe) * math.sin(ekliptik))
+    rektaszension = math.atan2(math.cos(schiefe) * math.sin(ekliptik), math.cos(ekliptik))
+    sternzeit = math.radians((280.46061837 + 360.98564736629 * n + laenge) % 360)
+    stundenwinkel = sternzeit - rektaszension
+    phi = math.radians(breite)
+    sinus = (math.sin(phi) * math.sin(deklination)
+             + math.cos(phi) * math.cos(deklination) * math.cos(stundenwinkel))
+    return math.degrees(math.asin(max(-1.0, min(1.0, sinus))))
+
+
+def sonnenauf_untergang(tag, breite: float, laenge: float):
+    """(Aufgang, Untergang) als UTC-Timestamps für einen Kalendertag (UTC).
+
+    Sucht minütlich den Durchgang durch den Horizont (−0,833°) und
+    interpoliert linear. Fehlt ein Durchgang (Polartag, Polarnacht), steht
+    dort ``None``. Probe Echterdingen, 21.09.2026: Aufgang 5:08 UTC, Untergang
+    17:23 UTC (7:08 bzw. 19:23 MESZ); Kalenderwerte für Stuttgart liegen
+    innerhalb von drei Minuten. 21.06.: 3:20 / 19:29 UTC, 21.12.: 7:12 / 15:29 UTC.
+    """
+    start = pd.Timestamp(tag).normalize()
+    minuten = pd.date_range(start, periods=24 * 60 + 1, freq="min")
+    hoehen = [sonnenhoehe(t, breite, laenge) - HORIZONT for t in minuten]
+    aufgang = untergang = None
+    for t0, t1, h0, h1 in zip(minuten, minuten[1:], hoehen, hoehen[1:]):
+        if h0 < 0 <= h1 and aufgang is None:
+            aufgang = t0 + (t1 - t0) * (h0 / (h0 - h1))
+        elif h0 >= 0 > h1 and untergang is None:
+            untergang = t0 + (t1 - t0) * (h0 / (h0 - h1))
+    return aufgang, untergang
 #: Erster Tag jedes Monats im 365-Tage-Schema (siehe climatology.doy_no_leap).
 MONTH_STARTS = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
 MONTH_END = 366

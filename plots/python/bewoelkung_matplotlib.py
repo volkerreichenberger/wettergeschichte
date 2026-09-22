@@ -61,13 +61,10 @@ STATION_BEWOELKUNG = 4928
 #: Skalen von wolkenlos nach bedeckt, fest an 0 bis 8 Achtel gebunden.
 #: „blau" liest den Himmel, „gelb" die Sonne. Gelb läuft über ein helles
 #: Sandton-Mittel statt direkt ins Grau – die direkte Mischung wird kakifarben.
-SKALEN = {
-    "blau": ["#1f7ae0", "#7ea6cf", "#adb5bd", "#8d9296"],
-    "gelb": ["#f9c22e", "#f2e3b3", "#d5d8db", "#8d9296"],
-    # Himmel für den Sonnen-Stil: von klarem Blau ins Wolkengrau.
-    "sonne": ["#2f80ed", "#6f9ed6", "#a8b2bb", "#8d9296"],
-}
-OKTA_MAX = 8
+#: Die Werte liegen in wg_common, weil der Drei-Tage-Streifen dieselbe Skala
+#: nimmt – zwei Kopien würden auseinanderlaufen.
+SKALEN = wg.SKALEN
+OKTA_MAX = wg.OKTA_MAX
 
 #: Farbe der Sonnenscheibe im Stil „sonne".
 SONNENGELB = "#ffcc2f"
