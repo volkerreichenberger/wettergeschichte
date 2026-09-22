@@ -15,8 +15,10 @@ hinter die Vorjahreskurven müsste.
 
 Grundlage sind Stundenwerte (``fetch_hourly.py``), nicht die Tageswerte: drei
 Tage wären sonst drei Punkte. Die Vorjahre werden über Monat, Tag und Stunde
-zugeordnet, liegen also kalendarisch exakt untereinander. Alle Zeiten sind
-UTC, wie der DWD sie liefert – auch die Tagesgrenzen und die Sonnenmarken.
+zugeordnet, liegen also kalendarisch exakt untereinander. Alle Zeiten im Bild
+und im Begleittext sind Ortszeit (Europe/Berlin); der DWD liefert UTC, die
+Umrechnung passiert beim Laden. Tagesgrenzen und Sonnenmarken folgen der
+Ortszeit; am Tag der Zeitumstellung hat ein Tag 23 oder 25 Stunden.
 
     python plots/python/drei_tage_matplotlib.py --station 4931
     python plots/python/drei_tage_matplotlib.py --station 4928 --days 5 --years 3
@@ -81,6 +83,7 @@ def load_hourly(data_dir: Path, station_id: int) -> pd.DataFrame:
             f"{path} fehlt – bitte zuerst 'python fetch_hourly.py' laufen lassen."
         )
     df = pd.read_csv(path, parse_dates=["timestamp"], usecols=["timestamp", "temp_c"])
+    df["timestamp"] = wg.nach_ortszeit(df["timestamp"])
     return df.dropna(subset=["temp_c"])
 
 
@@ -92,7 +95,9 @@ def load_cloud(data_dir: Path, station_id: int) -> pd.DataFrame:
             f"{path} fehlt – bitte zuerst 'python fetch_hourly.py --datasets cloudiness' "
             f"laufen lassen."
         )
-    return pd.read_csv(path, parse_dates=["timestamp"], usecols=["timestamp", "cloud_okta"])
+    df = pd.read_csv(path, parse_dates=["timestamp"], usecols=["timestamp", "cloud_okta"])
+    df["timestamp"] = wg.nach_ortszeit(df["timestamp"])
+    return df
 
 
 def build_window(df: pd.DataFrame, days: int, years: int, stand: str | None = None,
@@ -110,7 +115,9 @@ def build_window(df: pd.DataFrame, days: int, years: int, stand: str | None = No
     ``cloud_okta``); die Vorjahre brauchen ihn nicht.
     """
     if stand:
-        cut = pd.Timestamp(stand) + pd.Timedelta(hours=23)
+        # Stichtag in Ortszeit, bis zur letzten Stunde des Tages. Nicht
+        # „0 Uhr + 23 h": am Tag der Zeitumstellung landet das am Folgetag.
+        cut = pd.Timestamp(f"{stand} 23:00").tz_localize(wg.ORTSZEIT)
         df = df[df["timestamp"] <= cut]
         if df.empty:
             raise SystemExit(f"Keine Stundenwerte bis zum Stichtag {stand}.")
@@ -202,10 +209,12 @@ def sky_colors(current: pd.DataFrame, station_id: int) -> np.ndarray:
                    .reindex(raster).ffill().bfill())
     # Zu einer fehlenden Stunde gehört die halbe Stunde davor und danach:
     # sonst würde die Interpolation die Lücke einfach überbrücken.
-    ohne_wert = set(stunden.index[stunden.isna()])
+    # Gerundet wird in UTC: das Runden zonenbewusster Zeiten scheitert an der
+    # fehlenden bzw. doppelten Stunde der Zeitumstellung.
+    ohne_wert = {wg.utc_naiv(ts) for ts in stunden.index[stunden.isna()]}
     farben = np.ones((1, len(raster), 3))
     for i, (ts, okta) in enumerate(zip(raster, fein.to_numpy())):
-        if pd.isna(okta) or ts.round("h") in ohne_wert:
+        if pd.isna(okta) or wg.utc_naiv(ts).round("h") in ohne_wert:
             continue
         anteil = tagesanteil(wg.sonnenhoehe(ts, breite, laenge))
         wert = min(1.0, max(0.0, okta / wg.OKTA_MAX))
@@ -254,7 +263,7 @@ def sky_strip(ax, current: pd.DataFrame, station_id: int):
 
 
 def himmel_absatz(current: pd.DataFrame, sonnenzeiten) -> str:
-    """Erklärt den Streifen, nennt Kennzahlen und die Sonnenzeiten (UTC)."""
+    """Erklärt den Streifen, nennt Kennzahlen und die Sonnenzeiten (Ortszeit)."""
     okta = current["cloud_okta"]
     fehlend = int(okta.isna().sum())
     zeilen = [
@@ -279,7 +288,7 @@ def himmel_absatz(current: pd.DataFrame, sonnenzeiten) -> str:
         for tag, auf, unter in sonnenzeiten if auf is not None and unter is not None
     ]
     if sonne:
-        zeilen.append("· Sonne: " + ", ".join(sonne) + " (alle Zeiten UTC, wie die Messwerte)")
+        zeilen.append("· Sonne: " + ", ".join(sonne))
     return "\n".join(zeilen)
 
 

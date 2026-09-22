@@ -71,15 +71,40 @@ STATION_KOORDINATEN = {4931: (48.6883, 9.2235), 4928: (48.8281, 9.2000)}
 #: halber Sonnendurchmesser, wie in jedem Kalender.
 HORIZONT = -0.833
 
+#: Alle Bilder und Begleittexte nennen Ortszeit (Beschluss 22.09.2026). Der
+#: DWD liefert Stundenwerte in UTC; ``nach_ortszeit`` rechnet sie beim Laden um.
+ORTSZEIT = "Europe/Berlin"
 
-def sonnenhoehe(zeitpunkt_utc, breite: float, laenge: float) -> float:
-    """Höhe der Sonne über dem Horizont in Grad, für einen UTC-Zeitpunkt.
 
-    Sonnenposition nach den Näherungsformeln des Astronomical Almanac
-    (Genauigkeit rund 0,01°, für Stundenfelder mehr als genug), Stundenwinkel
-    über die Sternzeit – so braucht es keine Zeitgleichung und kein Paket.
+def nach_ortszeit(zeitpunkte: pd.Series) -> pd.Series:
+    """UTC-Zeitstempel (naiv, wie der DWD sie liefert) in zonenbewusste Ortszeit.
+
+    Zonenbewusst statt naiv, damit die doppelte Stunde beim Wechsel auf
+    Winterzeit zwei verschiedene Zeitpunkte bleibt und die fehlende Stunde im
+    Frühjahr keine Lücke vortäuscht.
     """
-    n = pd.Timestamp(zeitpunkt_utc).to_julian_date() - 2451545.0
+    return zeitpunkte.dt.tz_localize("UTC").dt.tz_convert(ORTSZEIT)
+
+
+def utc_naiv(zeitpunkt) -> pd.Timestamp:
+    """Zeitpunkt als naiver UTC-Timestamp; naive Eingaben gelten als UTC."""
+    ts = pd.Timestamp(zeitpunkt)
+    if ts.tzinfo is not None:
+        ts = ts.tz_convert("UTC").tz_localize(None)
+    return ts
+
+
+def sonnenhoehe(zeitpunkt, breite: float, laenge: float) -> float:
+    """Höhe der Sonne über dem Horizont in Grad.
+
+    ``zeitpunkt`` darf zonenbewusst sein (dann wird nach UTC umgerechnet) oder
+    naiv (dann gilt er als UTC). Sonnenposition nach den Näherungsformeln des
+    Astronomical Almanac (Genauigkeit rund 0,01°, für Stundenfelder mehr als
+    genug), Stundenwinkel über die Sternzeit – so braucht es keine Zeitgleichung
+    und kein Paket. Achtung: ``Timestamp.to_julian_date`` ignoriert die Zone,
+    deshalb vorher explizit nach UTC.
+    """
+    n = utc_naiv(zeitpunkt).to_julian_date() - 2451545.0
     mittlere_laenge = (280.460 + 0.9856474 * n) % 360
     anomalie = math.radians((357.528 + 0.9856003 * n) % 360)
     ekliptik = math.radians(
@@ -97,16 +122,21 @@ def sonnenhoehe(zeitpunkt_utc, breite: float, laenge: float) -> float:
 
 
 def sonnenauf_untergang(tag, breite: float, laenge: float):
-    """(Aufgang, Untergang) als UTC-Timestamps für einen Kalendertag (UTC).
+    """(Aufgang, Untergang) für einen Kalendertag, in der Zone von ``tag``.
 
-    Sucht minütlich den Durchgang durch den Horizont (−0,833°) und
-    interpoliert linear. Fehlt ein Durchgang (Polartag, Polarnacht), steht
-    dort ``None``. Probe Echterdingen, 21.09.2026: Aufgang 5:08 UTC, Untergang
-    17:23 UTC (7:08 bzw. 19:23 MESZ); Kalenderwerte für Stuttgart liegen
-    innerhalb von drei Minuten. 21.06.: 3:20 / 19:29 UTC, 21.12.: 7:12 / 15:29 UTC.
+    Ein zonenbewusster ``tag`` (Ortszeit) liefert Ortszeiten und meint den
+    örtlichen Kalendertag; ein naiver gilt als UTC. Sucht minütlich den
+    Durchgang durch den Horizont (−0,833°) und interpoliert linear. Fehlt ein
+    Durchgang (Polartag, Polarnacht), steht dort ``None``. Probe Echterdingen,
+    21.09.2026 (MESZ): Aufgang 7:08, Untergang 19:23; Kalenderwerte für
+    Stuttgart liegen innerhalb von drei Minuten. 21.06.: 5:20 / 21:29 MESZ,
+    21.12.: 8:12 / 16:29 MEZ.
     """
     start = pd.Timestamp(tag).normalize()
-    minuten = pd.date_range(start, periods=24 * 60 + 1, freq="min")
+    ende = start + pd.Timedelta(days=1)
+    # Beim Wechsel auf Sommerzeit hat der Tag 23 Stunden, im Herbst 25 –
+    # date_range in der Zone zählt das richtig.
+    minuten = pd.date_range(start, ende, freq="min")
     hoehen = [sonnenhoehe(t, breite, laenge) - HORIZONT for t in minuten]
     aufgang = untergang = None
     for t0, t1, h0, h1 in zip(minuten, minuten[1:], hoehen, hoehen[1:]):

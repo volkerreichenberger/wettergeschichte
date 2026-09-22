@@ -229,7 +229,13 @@ Stundenwerten linear auf einem 6-Minuten-Raster (`FEIN`); die Dämmerung wird
 je Rasterpunkt gemischt. Fehlende Stunden bleiben weiß, samt der halben Stunde
 davor und danach, damit die Interpolation eine Lücke nicht überbrückt.
 Sonnenzeiten geprüft: innerhalb von drei Minuten an den Kalenderwerten.
-Nicht committet.
+Committet als `9de58aa`.
+
+**Entscheidung Zeitbasis (22.09.2026): immer Ortszeit.** Die Stundenwerte
+werden beim Laden von UTC nach Europe/Berlin umgerechnet (zonenbewusst, damit
+die Zeitumstellung keine Lücke vortäuscht und die doppelte Stunde im Herbst
+erhalten bleibt). Tagesgrenzen, Uhrzeiten im Begleittext und Sonnenmarken sind
+seitdem Ortszeit; die erste offene Entscheidung unten ist damit erledigt.
 
 ## 5. Offene Entscheidungen
 

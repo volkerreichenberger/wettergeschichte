@@ -477,7 +477,10 @@ Alles davon sind echte Eigenheiten der Messreihen, keine Fehler der Skripte:
   („nicht bestimmbar", meist Nebel) wird beim Einlesen zu NaN und bleibt im
   Streifen weiß; `cloud_source` sagt, ob ein Ceilometer (`I`) oder ein
   Beobachter (`P`) gemessen hat. Alle Stundenwerte des DWD stehen in **UTC**,
-  auch die Temperatur, also liegen die Tagesgrenzen im Bild bei 0 Uhr UTC.
+  auch die Temperatur; das Drei-Tage-Skript rechnet sie beim Laden in
+  **Ortszeit** um (`wg.nach_ortszeit`), so dass Tagesgrenzen, Uhrzeiten im
+  Begleittext und Sonnenmarken Ortszeit sind. Regel seit 22.09.2026: Bilder
+  und Texte nennen immer Ortszeit.
 
 Die beiden Stationen taugen für Temperatur gut als Ersatz füreinander, für
 Bewölkung und Sonnenschein nicht — dort entscheidet die Lücke, welche Station
