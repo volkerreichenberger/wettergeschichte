@@ -121,8 +121,17 @@ def build_window(df: pd.DataFrame, days: int, years: int, stand: str | None = No
         df = df[df["timestamp"] <= cut]
         if df.empty:
             raise SystemExit(f"Keine Stundenwerte bis zum Stichtag {stand}.")
+    # Der DWD liefert bis 23 Uhr UTC, in Ortszeit also bis 1 oder 2 Uhr des
+    # Folgetags. Dieser angebrochene Tag fällt weg, sonst hängt ein Stummel
+    # mit überlappender Beschriftung am Bild und ein voller Tag fehlt.
     last = df["timestamp"].max()
-    start = (last.normalize() - pd.Timedelta(days=days - 1))
+    if last.hour != 23:
+        df = df[df["timestamp"] < last.normalize()]
+        last = df["timestamp"].max()
+    # Kalendertage zurück, nicht 24-Stunden-Schritte: über eine Zeitumstellung
+    # hinweg läge der Beginn sonst um 23 oder 1 Uhr statt um Mitternacht.
+    start = (last.tz_localize(None).normalize()
+             - pd.Timedelta(days=days - 1)).tz_localize(wg.ORTSZEIT)
     current = df[(df["timestamp"] >= start) & (df["timestamp"] <= last)].copy()
     current = current.sort_values("timestamp").reset_index(drop=True)
     current["x"] = range(len(current))
