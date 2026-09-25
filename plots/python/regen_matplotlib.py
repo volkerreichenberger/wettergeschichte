@@ -90,6 +90,30 @@ def normalkurve(derived: Path, station: int) -> pd.Series:
     return clim.set_index("doy")["normal_precip"].cumsum()
 
 
+def mittelkurve(voll: pd.DataFrame, jahre: list[int]) -> pd.Series:
+    """Kumulierter mittlerer Niederschlag der angegebenen Jahre, Tag für Tag.
+
+    Gemittelt wird die Tagessumme je Kalendertag, erst danach wird aufsummiert
+    – das ist dasselbe wie das Mittel der Summenkurven, bleibt aber auch dann
+    richtig, wenn einem Jahr einzelne Tage fehlen. Geglättet wird nicht: Die
+    Kurve soll zeigen, in welchen Wochen es im Schnitt mehr regnet, und das
+    steckt in ihrer Steigung.
+    """
+    sub = voll[voll["jahr"].isin(jahre)]
+    # Der 29. Februar fällt mit dem 28. zusammen, also erst je Jahr und Tag summieren.
+    tag = sub.groupby(["jahr", doy_ohne_schalttag(sub["date"])])["precip_mm"].sum()
+    mittel = tag.groupby(level=1).mean().reindex(range(1, 366), fill_value=0)
+    return mittel.cumsum()
+
+
+def wo_es_regnet(voll: pd.DataFrame, jahre: list[int]) -> tuple[str, str]:
+    """Nassester und trockenster Monat im Mittel der angegebenen Jahre."""
+    sub = voll[voll["jahr"].isin(jahre)]
+    monat = sub.groupby(["jahr", "monat"])["precip_mm"].sum().groupby(level=1).mean()
+    return (wg.MONTH_NAMES_LONG[monat.idxmax() - 1],
+            wg.MONTH_NAMES_LONG[monat.idxmin() - 1])
+
+
 def stil() -> None:
     plt.rcParams.update({**wg.rc_font(),
                          "figure.facecolor": wg.BACKGROUND,
@@ -218,7 +242,7 @@ def schnee(df, args, name):
 # --------------------------------------------------------------------------- #
 
 def kumulativ(df, args, name):
-    """Ein Feld je Jahr, darin die Summenkurve gegen den Normalverlauf.
+    """Ein Feld je Jahr, darin die Summenkurve gegen das Mittel der letzten Jahre.
 
     Gegenüber allen Jahren in einem Feld (``rueckstand``) gewinnt man Ruhe: Man
     sieht je Jahr, *wann* der Rückstand entstand, statt fünf Kurven zu
@@ -227,11 +251,16 @@ def kumulativ(df, args, name):
     voll = df.dropna(subset=["precip_mm"])
     tage = voll.groupby("jahr")["precip_mm"].count()
     # Das laufende Jahr darf unvollständig sein, die Vergleichsjahre nicht.
-    jahre = sorted(voll["jahr"].unique(), reverse=True)
-    jahre = [jahre[0]] + [j for j in jahre[1:] if tage[j] >= 350]
-    jahre = jahre[:4]
+    alle = sorted(voll["jahr"].unique(), reverse=True)
+    vollstaendig = [j for j in alle[1:] if tage[j] >= 350]
+    jahre = [alle[0]] + vollstaendig[:3]
 
-    normal = normalkurve(args.derived, args.station)
+    # Vergleich sind die letzten abgeschlossenen Jahre, nicht 1991–2020: Die
+    # Linie soll zeigen, wie sich das Jahr zuletzt verteilt hat.
+    mitteljahre = sorted(vollstaendig[:args.mittel_jahre])
+    von, bis_jahr = mitteljahre[0], mitteljahre[-1]
+    normal = mittelkurve(voll, mitteljahre)
+    nass, trocken = wo_es_regnet(voll, mitteljahre)
     kurven = {}
     for jahr in jahre:
         sub = voll[voll["jahr"] == jahr].sort_values("date")
@@ -245,9 +274,10 @@ def kumulativ(df, args, name):
     for i, jahr in enumerate(jahre):
         ax = fig.add_axes((0.135, 0.663 - i * 0.178, 0.825, 0.138))
         # Ueber der blauen Kurve, nicht darunter: wo beide fast gleich laufen,
-        # verschwaende die duenne gestrichelte Linie sonst hinter der dicken.
-        ax.plot(normal.index, normal.values, color=wg.TEXT_MUTED, lw=1.3,
-                ls=(0, (5, 3)), zorder=5)
+        # verschwaende die duenne gepunktete Linie sonst hinter der dicken.
+        # Runde Punkte: Striche fast ohne Laenge, die Kappe macht sie rund.
+        ax.plot(normal.index, normal.values, color=wg.TEXT_MUTED, lw=1.9,
+                ls=(0, (0.01, 2.2)), dash_capstyle="round", zorder=5)
         kurve = kurven[jahr]
         ax.fill_between(kurve.index, 0, kurve.values, color=BLAU, alpha=0.14, zorder=2)
         ax.plot(kurve.index, kurve.values, color=BLAU, lw=2.4,
@@ -267,6 +297,12 @@ def kumulativ(df, args, name):
         ax.text(0.008, 0.9, str(jahr), transform=ax.transAxes, va="top",
                 fontsize=15, fontweight="bold",
                 color=BLAU if i == 0 else wg.TEXT)
+        if i == 0:
+            # Im laufenden Jahr steht rechts nur die gepunktete Linie – dort
+            # ist Platz, sie zu benennen.
+            ax.annotate(f"Mittel {von}–{bis_jahr}", xy=(320, normal.loc[320]),
+                        xytext=(0, -9), textcoords="offset points", fontsize=10.5,
+                        color=wg.TEXT_MUTED, ha="center", va="top")
 
     zeilen = []
     for i, jahr in enumerate(jahre):
@@ -276,17 +312,19 @@ def kumulativ(df, args, name):
         # Das laufende Jahr steht mit einem Teiljahr in der Liste – das muss dran.
         bis = f" (bis {voll[voll['jahr'] == jahr]['date'].max():%d.%m.})" if i == 0 else ""
         zeilen.append(f"· {jahr}{bis}: {ende} mm, {abs(ende - soll)} mm "
-                      f"{'über' if ende > soll else 'unter'} normal")
+                      f"{'über' if ende > soll else 'unter'} dem Mittel")
     laufend = jahre[0]
     return fig, (
         f"Der Niederschlag jedes Jahres, Tag für Tag aufsummiert. Die "
-        f"gestrichelte Linie ist der Normalverlauf der Periode 1991–2020; wo die "
-        f"blaue Kurve darunter bleibt, fehlt Regen. Alle vier Felder haben "
+        f"gepunktete Linie ist das Mittel der Jahre {von}–{bis_jahr}; wo die "
+        f"blaue Kurve darunter bleibt, fehlt Regen. Wo die gepunktete Linie "
+        f"steiler wird, regnet es in dieser Jahreszeit im Schnitt mehr – am "
+        f"meisten im {nass}, am wenigsten im {trocken}. Alle vier Felder haben "
         f"dieselbe Skala.\n\n"
         + "\n".join(zeilen)
         + f"\n\nDie Darstellung zeigt nicht nur, wieviel fehlt, sondern auch wann "
         f"es fehlte – ein flaches Stück in der Kurve ist eine Trockenperiode. "
-        f"{laufend} läuft noch, verglichen wird deshalb mit dem Normalwert bis "
+        f"{laufend} läuft noch, verglichen wird deshalb mit dem Mittel bis "
         f"zum selben Kalendertag."
     )
 
@@ -307,6 +345,9 @@ def main(argv=None) -> int:
     ap.add_argument("--data-dir", type=Path, default=wg.ROOT / "data")
     ap.add_argument("--posts", type=Path, default=wg.POSTS)
     ap.add_argument("--jpeg-quality", type=int, default=92)
+    ap.add_argument("--mittel-jahre", type=int, default=10,
+                    help="aus so vielen abgeschlossenen Jahren wird die "
+                         "Vergleichslinie in 'kumulativ' gemittelt")
     args = ap.parse_args(argv)
 
     stil()
